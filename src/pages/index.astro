@@ -3,1043 +3,805 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import ShaderCanvas from '@/components/ShaderCanvas.astro';
 ---
 
-<BaseLayout title="Nabhi Shah — Atmospheric Portfolio 2027">
+<BaseLayout title="Atmospheric Weather Shader Sandbox">
   <ShaderCanvas />
 
-  <main class="weather-shell">
-    <!-- Top Navigation & Sky Switcher -->
-    <header class="topbar">
-      <div class="brand-group">
-        <span class="brand-name">NABHI SHAH</span>
-        <span class="brand-tag">PORTFOLIO ’27</span>
+  <aside class="sandbox-panel" id="sandbox-panel" aria-label="Weather & Atmosphere Shader Controls">
+    <header class="panel-header">
+      <div class="panel-title-wrap">
+        <span class="status-dot"></span>
+        <h1 class="panel-title">Weather Shader Controls</h1>
       </div>
-
-      <div class="controls-bar">
-        <div class="sky-tabs" role="tablist" aria-label="Active Location Sky">
-          <button
-            type="button"
-            class="sky-tab is-active"
-            data-sky-mode="host"
-            role="tab"
-            aria-selected="true"
-          >
-            <span class="dot live-dot"></span>
-            <span>Nabhi’s Sky</span>
-            <span class="tab-meta" id="tab-host-meta">--°</span>
-          </button>
-          <button
-            type="button"
-            class="sky-tab"
-            data-sky-mode="visitor"
-            role="tab"
-            aria-selected="false"
-          >
-            <span class="dot visitor-dot"></span>
-            <span>Your Sky</span>
-            <span class="tab-meta" id="tab-visitor-meta">--°</span>
-          </button>
-        </div>
-
-        <div class="shader-presets" aria-label="Shader Mood Preview">
-          <button type="button" class="preset-chip" data-preset="clear" title="Preview Reference Sunny Sky">
-            ☀ Clear 29°
-          </button>
-          <button type="button" class="preset-chip" data-preset="golden" title="Preview Golden Hour">
-            🌅 Sunset
-          </button>
-          <button type="button" class="preset-chip" data-preset="storm" title="Preview Rain & Lightning">
-            ⛈ Storm
-          </button>
-          <button type="button" class="preset-chip" data-preset="night" title="Preview Starry Night">
-            🌙 Night
-          </button>
-        </div>
-      </div>
+      <button type="button" class="collapse-btn" id="toggle-panel-btn" title="Collapse / Expand Controls">
+        Hide UI
+      </button>
     </header>
 
-    <!-- Main One UI Inspired Content Grid -->
-    <div class="content-grid">
-      <!-- Left: One UI Hero Weather Readout -->
-      <section class="hero-weather" aria-live="polite">
-        <div class="location-row">
-          <svg class="pin-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z" />
-          </svg>
-          <h1 class="city-name" id="active-city">Loading Sky…</h1>
-          <span class="role-badge" id="active-owner-badge">Nabhi’s Location</span>
+    <div class="panel-body" id="panel-body">
+      <!-- Live Location Quick Sync -->
+      <section class="control-section">
+        <div class="section-label">
+          <span>Live Location Feed</span>
+          <span class="live-readout" id="live-status-text">Afternoon · Sunny</span>
         </div>
-
-        <div class="time-subtitle">
-          <span id="active-local-time">--:--</span>
-          <span class="sep">·</span>
-          <span id="active-tz">Local Time</span>
-        </div>
-
-        <div class="temp-hero" id="active-temp">29°</div>
-        <div class="condition-hero" id="active-condition">Clear</div>
-
-        <div class="high-low-row">
-          <span class="hl-item">↑ <strong id="active-max">34°</strong></span>
-          <span class="hl-item">↓ <strong id="active-min">27°</strong></span>
-        </div>
-        <div class="feels-like">
-          Feels like <span id="active-feels">32°</span>
+        <div class="chip-grid cols-2">
+          <button type="button" class="ctrl-chip" id="btn-live-host">
+            📍 My Location (<span id="host-mini-label">New York</span>)
+          </button>
+          <button type="button" class="ctrl-chip" id="btn-live-visitor">
+            🧭 Visitor (<span id="visitor-mini-label">Detecting…</span>)
+          </button>
         </div>
       </section>
 
-      <!-- Right / Bottom: One UI Frosted Glass Cards -->
-      <section class="cards-stack">
-        <!-- Card 1: One UI Hourly Forecast & Curve Card -->
-        <article class="glass-card hourly-card">
-          <p class="card-headline" id="active-summary">
-            Sunlit sky with volumetric clouds and crepuscular rays.
-          </p>
-          <div class="card-divider"></div>
+      <!-- Time of Day -->
+      <section class="control-section">
+        <div class="section-label">
+          <span>Time of Day</span>
+        </div>
+        <div class="chip-grid cols-3" id="time-presets">
+          <button type="button" class="ctrl-chip" data-time="dawn">🌅 Dawn</button>
+          <button type="button" class="ctrl-chip" data-time="morning">🌤 Morning</button>
+          <button type="button" class="ctrl-chip is-active" data-time="afternoon">☀ Afternoon</button>
+          <button type="button" class="ctrl-chip" data-time="dusk">🌇 Dusk</button>
+          <button type="button" class="ctrl-chip" data-time="evening">🌆 Evening</button>
+          <button type="button" class="ctrl-chip" data-time="night">🌙 Night</button>
+        </div>
+      </section>
 
-          <div class="hourly-columns" id="hourly-columns">
-            <!-- Populated dynamically -->
-          </div>
+      <!-- Weather Patterns -->
+      <section class="control-section">
+        <div class="section-label">
+          <span>Weather Pattern</span>
+        </div>
+        <div class="chip-grid cols-3" id="weather-presets">
+          <button type="button" class="ctrl-chip is-active" data-weather="sunny">☀ Sunny</button>
+          <button type="button" class="ctrl-chip" data-weather="partly">⛅ Partly Cloudy</button>
+          <button type="button" class="ctrl-chip" data-weather="cloudy">🌥 Mostly Cloudy</button>
+          <button type="button" class="ctrl-chip" data-weather="overcast">☁ Overcast</button>
+          <button type="button" class="ctrl-chip" data-weather="fog">🌫 Fog / Mist</button>
+          <button type="button" class="ctrl-chip" data-weather="slight-rain">🌦 Slight Rain</button>
+          <button type="button" class="ctrl-chip" data-weather="more-rain">🌧 More Rain</button>
+          <button type="button" class="ctrl-chip" data-weather="heavy-rain">🌊 Downpour</button>
+          <button type="button" class="ctrl-chip" data-weather="thunderstorm">⛈ Storm</button>
+          <button type="button" class="ctrl-chip" data-weather="light-snow">🌨 Light Snow</button>
+          <button type="button" class="ctrl-chip" data-weather="blizzard">❄ Blizzard</button>
+          <button type="button" class="ctrl-chip" data-weather="rainbow">🌈 Sunshower</button>
+          <button type="button" class="ctrl-chip" data-weather="dust">🏜 Sand / Dust</button>
+          <button type="button" class="ctrl-chip" data-weather="aurora">🌌 Aurora</button>
+        </div>
+      </section>
 
-          <!-- Smooth SVG Temperature Curve (One UI Amber Line) -->
-          <div class="curve-wrap">
-            <svg
-              id="temp-curve-svg"
-              viewBox="0 0 600 68"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              <defs>
-                <linearGradient id="curveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#ffb347" />
-                  <stop offset="50%" stop-color="#ff8c24" />
-                  <stop offset="100%" stop-color="#ffd269" />
-                </linearGradient>
-                <filter id="curveGlow" x="-20%" y="-40%" width="140%" height="180%">
-                  <feGaussianBlur stdDeviation="3.5" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-              </defs>
-              <path
-                id="temp-curve-path"
-                d="M 50 34 C 150 18, 250 22, 350 38 C 450 48, 500 46, 550 46"
-                fill="none"
-                stroke="url(#curveGrad)"
-                stroke-width="3.5"
-                stroke-linecap="round"
-                filter="url(#curveGlow)"
-              />
-              <g id="temp-curve-dots"></g>
-            </svg>
-          </div>
-
-          <div class="humidity-row" id="humidity-row">
-            <!-- Populated dynamically -->
-          </div>
-        </article>
-
-        <!-- Card 2: Dual Location Live Comparison (Nabhi vs Visitor) -->
-        <div class="dual-cards">
-          <article
-            class="glass-card location-compare-card is-selected"
-            id="card-host"
-            data-select-sky="host"
-            tabindex="0"
-            role="button"
-            aria-label="Switch shader sky to Nabhi's location"
-          >
-            <div class="compare-top">
-              <div>
-                <span class="compare-eyebrow">MY LOCATION · LIVE</span>
-                <h2 class="compare-city" id="host-city">New York</h2>
-              </div>
-              <span class="compare-clock" id="host-time">--:--</span>
-            </div>
-            <div class="compare-bottom">
-              <div class="compare-condition">
-                <span id="host-condition">Syncing…</span>
-                <span class="compare-hl" id="host-hl">↑ --° · ↓ --°</span>
-              </div>
-              <div class="compare-temp" id="host-temp">--°</div>
-            </div>
-          </article>
-
-          <article
-            class="glass-card location-compare-card"
-            id="card-visitor"
-            data-select-sky="visitor"
-            tabindex="0"
-            role="button"
-            aria-label="Switch shader sky to your current location"
-          >
-            <div class="compare-top">
-              <div>
-                <div class="eyebrow-with-action">
-                  <span class="compare-eyebrow">YOUR LOCATION · LIVE</span>
-                  <button
-                    type="button"
-                    class="gps-btn"
-                    id="precise-gps-btn"
-                    title="Use precise browser GPS location"
-                  >
-                    ◎ Precise GPS
-                  </button>
-                </div>
-                <h2 class="compare-city" id="visitor-city">Detecting…</h2>
-              </div>
-              <span class="compare-clock" id="visitor-time">--:--</span>
-            </div>
-            <div class="compare-bottom">
-              <div class="compare-condition">
-                <span id="visitor-condition">Syncing…</span>
-                <span class="compare-hl" id="visitor-hl">↑ --° · ↓ --°</span>
-              </div>
-              <div class="compare-temp" id="visitor-temp">--°</div>
-            </div>
-          </article>
+      <!-- Fine-Tuning Sliders -->
+      <section class="control-section">
+        <div class="section-label">
+          <span>Shader Parameters</span>
+          <button type="button" class="reset-link" id="reset-params-btn">Reset</button>
         </div>
 
-        <!-- Card 3: Atmospheric Metrics Strip (Yesterday/Today One UI style) -->
-        <article class="glass-card metrics-strip">
-          <div class="metric-item">
-            <span class="metric-label">Wind Flow</span>
-            <span class="metric-val" id="active-wind">11 km/h</span>
-          </div>
-          <div class="metric-sep"></div>
-          <div class="metric-item">
-            <span class="metric-label">Humidity</span>
-            <span class="metric-val" id="active-humidity">62%</span>
-          </div>
-          <div class="metric-sep"></div>
-          <div class="metric-item">
-            <span class="metric-label">Cloud Volume</span>
-            <span class="metric-val" id="active-clouds">22%</span>
-          </div>
-          <div class="metric-sep"></div>
-          <div class="metric-item">
-            <span class="metric-label">Shader Pipeline</span>
-            <span class="metric-val">Volumetric + HDR Bloom</span>
-          </div>
-        </article>
+        <div class="sliders-list">
+          <label class="slider-row">
+            <span class="slider-name">Sun Elevation</span>
+            <input type="range" min="-1" max="1" step="0.01" value="0.85" data-param="sunElevation" />
+            <span class="slider-val" data-val="sunElevation">0.85</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Sun Position X</span>
+            <input type="range" min="0.05" max="0.95" step="0.01" value="0.11" data-param="sunAzimuth" />
+            <span class="slider-val" data-val="sunAzimuth">0.11</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Cloud Cover</span>
+            <input type="range" min="0" max="1" step="0.01" value="0.24" data-param="cloudCover" />
+            <span class="slider-val" data-val="cloudCover">24%</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Cloud Volume</span>
+            <input type="range" min="0" max="2" step="0.02" value="1.0" data-param="cloudDensity" />
+            <span class="slider-val" data-val="cloudDensity">100%</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Sun Rays (God Rays)</span>
+            <input type="range" min="0" max="2" step="0.02" value="1.0" data-param="godRays" />
+            <span class="slider-val" data-val="godRays">100%</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">HDR Bloom Glow</span>
+            <input type="range" min="0" max="1.8" step="0.02" value="0.92" data-param="bloomStrength" />
+            <span class="slider-val" data-val="bloomStrength">92%</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Rain Intensity</span>
+            <input type="range" min="0" max="1" step="0.01" value="0" data-param="rain" />
+            <span class="slider-val" data-val="rain">0%</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Snow Intensity</span>
+            <input type="range" min="0" max="1" step="0.01" value="0" data-param="snow" />
+            <span class="slider-val" data-val="snow">0%</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Fog / Mist</span>
+            <input type="range" min="0" max="1" step="0.01" value="0" data-param="fog" />
+            <span class="slider-val" data-val="fog">0%</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Storm &amp; Lightning</span>
+            <input type="range" min="0" max="1" step="0.01" value="0" data-param="storm" />
+            <span class="slider-val" data-val="storm">0%</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Wind Speed</span>
+            <input type="range" min="0" max="3" step="0.05" value="1.0" data-param="windSpeed" />
+            <span class="slider-val" data-val="windSpeed">1.0x</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Dust / Sand Haze</span>
+            <input type="range" min="0" max="1" step="0.01" value="0" data-param="dust" />
+            <span class="slider-val" data-val="dust">0%</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Optical Rainbow</span>
+            <input type="range" min="0" max="1" step="0.01" value="0" data-param="rainbow" />
+            <span class="slider-val" data-val="rainbow">0%</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-name">Aurora Borealis</span>
+            <input type="range" min="0" max="1" step="0.01" value="0" data-param="aurora" />
+            <span class="slider-val" data-val="aurora">0%</span>
+          </label>
+        </div>
       </section>
     </div>
-  </main>
+  </aside>
 </BaseLayout>
 
 <script>
   import {
     HOST_LOCATION,
     detectVisitorLocation,
-    fetchWeatherForLocation,
-    formatTimeInZone
+    fetchWeatherForLocation
   } from '@/services/weatherService';
+  import {
+    DEFAULT_SHADER_TARGET,
+    type ShaderWeatherTarget
+  } from '@/webgl/ShaderStage';
   import type { WeatherState } from '@/config/weather';
-  import type { ShaderWeatherTarget } from '@/webgl/ShaderStage';
 
-  let hostWeather: WeatherState | null = null;
-  let visitorWeather: WeatherState | null = null;
-  let activeMode: 'host' | 'visitor' = 'host';
+  let currentTarget: ShaderWeatherTarget = { ...DEFAULT_SHADER_TARGET };
+  let activeTimeName = 'Afternoon';
+  let activeWeatherName = 'Sunny';
+  let hostState: WeatherState | null = null;
+  let visitorState: WeatherState | null = null;
 
-  const getWeatherIconSvg = (code: number, isDay = true): string => {
-    if (code === 0 || code === 1) {
-      return isDay
-        ? `<svg viewBox="0 0 28 28" class="wx-icon"><circle cx="14" cy="14" r="8" fill="#FFB830"/></svg>`
-        : `<svg viewBox="0 0 28 28" class="wx-icon"><path d="M17.5 7.5a7.5 7.5 0 1 0 3 13.8A6.5 6.5 0 0 1 17.5 7.5z" fill="#BFD7FF"/></svg>`;
-    }
-    if (code === 2 || code === 3 || code === 45 || code === 48) {
-      return `<svg viewBox="0 0 28 28" class="wx-icon">
-        <circle cx="11" cy="12" r="5" fill="#FFB830"/>
-        <path d="M10 21h10a4.5 4.5 0 0 0 .6-8.96A6 6 0 0 0 9 11a4.5 4.5 0 0 0 1 10z" fill="#EEF4FA"/>
-      </svg>`;
-    }
-    if (code >= 95) {
-      return `<svg viewBox="0 0 28 28" class="wx-icon">
-        <path d="M8.5 19h11a4 4 0 0 0 .5-7.96A5.5 5.5 0 0 0 8 10a4 4 0 0 0 .5 9z" fill="#DCE6F2"/>
-        <path d="M14.5 16l-3 5h2.5l-1 4 4.5-6h-2.5l1.5-3z" fill="#FFC83B"/>
-      </svg>`;
-    }
-    return `<svg viewBox="0 0 28 28" class="wx-icon">
-      <path d="M8.5 18h11a4 4 0 0 0 .5-7.96A5.5 5.5 0 0 0 8 9a4 4 0 0 0 .5 9z" fill="#E4EEF8"/>
-      <line x1="11" y1="20" x2="9.5" y2="24" stroke="#6EC3FF" stroke-width="2" stroke-linecap="round"/>
-      <line x1="15.5" y1="20" x2="14" y2="24" stroke="#6EC3FF" stroke-width="2" stroke-linecap="round"/>
-      <line x1="20" y1="20" x2="18.5" y2="24" stroke="#6EC3FF" stroke-width="2" stroke-linecap="round"/>
-    </svg>`;
+  // 6 Time-of-day solar profiles
+  const TIME_PRESETS: Record<
+    string,
+    { label: string; sunElevation: number; sunAzimuth: number; godRays: number }
+  > = {
+    dawn: { label: 'Dawn', sunElevation: 0.04, sunAzimuth: 0.16, godRays: 1.25 },
+    morning: { label: 'Morning', sunElevation: 0.45, sunAzimuth: 0.14, godRays: 1.15 },
+    afternoon: { label: 'Afternoon', sunElevation: 0.85, sunAzimuth: 0.11, godRays: 1.05 },
+    dusk: { label: 'Dusk', sunElevation: 0.08, sunAzimuth: 0.82, godRays: 1.35 },
+    evening: { label: 'Evening', sunElevation: -0.18, sunAzimuth: 0.78, godRays: 0.45 },
+    night: { label: 'Night', sunElevation: -0.75, sunAzimuth: 0.22, godRays: 0.3 }
   };
 
-  const renderCurve = (temps: number[]) => {
-    const pathEl = document.getElementById('temp-curve-path');
-    const dotsEl = document.getElementById('temp-curve-dots');
-    if (!pathEl || !dotsEl || temps.length === 0) return;
-
-    const min = Math.min(...temps);
-    const max = Math.max(...temps);
-    const span = Math.max(2, max - min);
-
-    const points = temps.map((t, i) => {
-      const x = 50 + i * (500 / Math.max(1, temps.length - 1));
-      const norm = (t - min) / span; // 0..1
-      const y = 52 - norm * 34; // y in [18..52]
-      return { x, y };
-    });
-
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[i];
-      const p1 = points[i + 1];
-      const cx = (p0.x + p1.x) / 2;
-      d += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
-    }
-    pathEl.setAttribute('d', d);
-
-    dotsEl.innerHTML = points
-      .map(
-        (pt, idx) =>
-          `<circle cx="${pt.x}" cy="${pt.y}" r="${idx === 0 ? 4.5 : 3}" fill="#fff" stroke="#ff9d3b" stroke-width="2"/>`
-      )
-      .join('');
-  };
-
-  const renderActiveHero = (state: WeatherState) => {
-    const setText = (id: string, val: string) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = val;
-    };
-
-    setText('active-city', state.location.city);
-    setText('active-owner-badge', state.location.label);
-    setText('active-local-time', state.localTimeStr);
-    setText('active-tz', state.location.timezone.replace(/_/g, ' '));
-    setText('active-temp', `${state.temperature}°`);
-    setText('active-condition', state.conditionLabel);
-    setText('active-max', `${state.tempMax}°`);
-    setText('active-min', `${state.tempMin}°`);
-    setText('active-feels', `${state.feelsLike}°`);
-    setText('active-summary', state.summaryLine);
-    setText('active-wind', `${state.windSpeed} km/h`);
-    setText('active-humidity', `${state.humidity}%`);
-    setText('active-clouds', `${Math.round(state.cloudCover * 100)}%`);
-
-    // Render hourly columns
-    const hourlyEl = document.getElementById('hourly-columns');
-    const humidityEl = document.getElementById('humidity-row');
-    if (hourlyEl && humidityEl) {
-      hourlyEl.innerHTML = state.hourly
-        .map(
-          (h) => `
-          <div class="hour-col">
-            <span class="hour-time">${h.time}</span>
-            <div class="hour-icon">${getWeatherIconSvg(h.code, state.isDay)}</div>
-            <span class="hour-temp">${h.temp}°</span>
-          </div>
-        `
-        )
-        .join('');
-
-      humidityEl.innerHTML = state.hourly
-        .map(
-          (h) => `
-          <div class="hum-col">
-            <span class="drop">💧</span>
-            <span>${h.humidity}%</span>
-          </div>
-        `
-        )
-        .join('');
-
-      renderCurve(state.hourly.map((h) => h.temp));
-    }
-
-    // Dispatch state to WebGL shader stage
-    window.dispatchEvent(new CustomEvent('weather:state', { detail: state }));
-  };
-
-  const renderComparisonCard = (prefix: 'host' | 'visitor', state: WeatherState) => {
-    const setText = (id: string, val: string) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = val;
-    };
-    setText(`${prefix}-city`, state.location.city);
-    setText(`${prefix}-time`, state.localTimeStr);
-    setText(`${prefix}-condition`, state.conditionLabel);
-    setText(`${prefix}-hl`, `↑ ${state.tempMax}° · ↓ ${state.tempMin}°`);
-    setText(`${prefix}-temp`, `${state.temperature}°`);
-    setText(`tab-${prefix}-meta`, `${state.location.city} ${state.temperature}°`);
-  };
-
-  const setActiveSkyMode = (mode: 'host' | 'visitor') => {
-    activeMode = mode;
-
-    // Clear any manual preset highlight
-    document.querySelectorAll('.preset-chip').forEach((btn) => btn.classList.remove('is-active'));
-
-    document.querySelectorAll('[data-sky-mode]').forEach((btn) => {
-      const isMatch = btn.getAttribute('data-sky-mode') === mode;
-      btn.classList.toggle('is-active', isMatch);
-      btn.setAttribute('aria-selected', String(isMatch));
-    });
-
-    document.getElementById('card-host')?.classList.toggle('is-selected', mode === 'host');
-    document.getElementById('card-visitor')?.classList.toggle('is-selected', mode === 'visitor');
-
-    const targetState = mode === 'host' ? hostWeather : visitorWeather;
-    if (targetState) {
-      renderActiveHero(targetState);
-    }
-  };
-
-  // Wire up tabs & comparison cards
-  document.querySelectorAll('[data-sky-mode]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const mode = btn.getAttribute('data-sky-mode') as 'host' | 'visitor';
-      setActiveSkyMode(mode);
-    });
-  });
-
-  document.querySelectorAll('[data-select-sky]').forEach((card) => {
-    card.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('#precise-gps-btn')) return;
-      const mode = card.getAttribute('data-select-sky') as 'host' | 'visitor';
-      setActiveSkyMode(mode);
-    });
-  });
-
-  // Wire up instant shader mood preview pills
-  const PRESETS: Record<string, { target: ShaderWeatherTarget; temp: string; label: string }> = {
-    clear: {
-      target: {
-        sunElevation: 0.82,
+  // 14 Weather Pattern Profiles
+  const WEATHER_PRESETS: Record<
+    string,
+    { label: string; params: Partial<ShaderWeatherTarget> }
+  > = {
+    sunny: {
+      label: 'Sunny',
+      params: {
         cloudCover: 0.22,
+        cloudDensity: 1.0,
+        godRays: 1.1,
+        fog: 0,
+        dust: 0,
         rain: 0,
-        storm: 0,
         snow: 0,
-        windSpeed: 1.0
-      },
-      temp: '29°',
-      label: 'Clear · Sunlit Volumetric Sky'
+        storm: 0,
+        windSpeed: 0.9,
+        rainbow: 0,
+        aurora: 0
+      }
     },
-    golden: {
-      target: {
-        sunElevation: 0.12,
-        cloudCover: 0.36,
+    partly: {
+      label: 'Partly Cloudy',
+      params: {
+        cloudCover: 0.46,
+        cloudDensity: 1.15,
+        godRays: 1.15,
+        fog: 0,
+        dust: 0,
         rain: 0,
-        storm: 0,
         snow: 0,
-        windSpeed: 0.85
-      },
-      temp: '24°',
-      label: 'Golden Hour · Crepuscular Rays'
+        storm: 0,
+        windSpeed: 1.1,
+        rainbow: 0,
+        aurora: 0
+      }
     },
-    storm: {
-      target: {
-        sunElevation: 0.25,
+    cloudy: {
+      label: 'Mostly Cloudy',
+      params: {
+        cloudCover: 0.72,
+        cloudDensity: 1.25,
+        godRays: 0.85,
+        fog: 0.08,
+        dust: 0,
+        rain: 0,
+        snow: 0,
+        storm: 0.15,
+        windSpeed: 1.25,
+        rainbow: 0,
+        aurora: 0
+      }
+    },
+    overcast: {
+      label: 'Overcast',
+      params: {
         cloudCover: 0.94,
-        rain: 0.9,
-        storm: 0.92,
-        snow: 0,
-        windSpeed: 2.1
-      },
-      temp: '18°',
-      label: 'Thunderstorm · Sheet Lightning'
-    },
-    night: {
-      target: {
-        sunElevation: -0.65,
-        cloudCover: 0.2,
+        cloudDensity: 1.4,
+        godRays: 0.25,
+        fog: 0.22,
+        dust: 0,
         rain: 0,
-        storm: 0,
         snow: 0,
-        windSpeed: 0.65
-      },
-      temp: '15°',
-      label: 'Starry Night · Lunar Glow'
+        storm: 0.35,
+        windSpeed: 1.1,
+        rainbow: 0,
+        aurora: 0
+      }
+    },
+    fog: {
+      label: 'Fog / Mist',
+      params: {
+        cloudCover: 0.65,
+        cloudDensity: 0.95,
+        godRays: 0.65,
+        fog: 0.82,
+        dust: 0,
+        rain: 0,
+        snow: 0,
+        storm: 0.1,
+        windSpeed: 0.5,
+        rainbow: 0,
+        aurora: 0
+      }
+    },
+    'slight-rain': {
+      label: 'Slight Rain',
+      params: {
+        cloudCover: 0.68,
+        cloudDensity: 1.15,
+        godRays: 0.45,
+        fog: 0.18,
+        dust: 0,
+        rain: 0.32,
+        snow: 0,
+        storm: 0.22,
+        windSpeed: 1.1,
+        rainbow: 0,
+        aurora: 0
+      }
+    },
+    'more-rain': {
+      label: 'Moderate Rain',
+      params: {
+        cloudCover: 0.85,
+        cloudDensity: 1.3,
+        godRays: 0.2,
+        fog: 0.3,
+        dust: 0,
+        rain: 0.65,
+        snow: 0,
+        storm: 0.45,
+        windSpeed: 1.55,
+        rainbow: 0,
+        aurora: 0
+      }
+    },
+    'heavy-rain': {
+      label: 'Downpour',
+      params: {
+        cloudCover: 0.96,
+        cloudDensity: 1.5,
+        godRays: 0.1,
+        fog: 0.42,
+        dust: 0,
+        rain: 0.95,
+        snow: 0,
+        storm: 0.68,
+        windSpeed: 2.2,
+        rainbow: 0,
+        aurora: 0
+      }
+    },
+    thunderstorm: {
+      label: 'Thunderstorm',
+      params: {
+        cloudCover: 0.98,
+        cloudDensity: 1.6,
+        godRays: 0.15,
+        fog: 0.32,
+        dust: 0,
+        rain: 0.92,
+        snow: 0,
+        storm: 0.98,
+        windSpeed: 2.5,
+        rainbow: 0,
+        aurora: 0
+      }
+    },
+    'light-snow': {
+      label: 'Light Snow',
+      params: {
+        cloudCover: 0.72,
+        cloudDensity: 1.15,
+        godRays: 0.45,
+        fog: 0.25,
+        dust: 0,
+        rain: 0,
+        snow: 0.42,
+        storm: 0.18,
+        windSpeed: 0.85,
+        rainbow: 0,
+        aurora: 0
+      }
+    },
+    blizzard: {
+      label: 'Blizzard',
+      params: {
+        cloudCover: 0.96,
+        cloudDensity: 1.5,
+        godRays: 0.1,
+        fog: 0.68,
+        dust: 0,
+        rain: 0,
+        snow: 0.98,
+        storm: 0.55,
+        windSpeed: 2.6,
+        rainbow: 0,
+        aurora: 0
+      }
+    },
+    rainbow: {
+      label: 'Sunshower & Rainbow',
+      params: {
+        cloudCover: 0.42,
+        cloudDensity: 1.05,
+        godRays: 1.35,
+        fog: 0.05,
+        dust: 0,
+        rain: 0.24,
+        snow: 0,
+        storm: 0,
+        windSpeed: 1.0,
+        rainbow: 0.95,
+        aurora: 0
+      }
+    },
+    dust: {
+      label: 'Sand / Dust Haze',
+      params: {
+        cloudCover: 0.45,
+        cloudDensity: 0.9,
+        godRays: 0.95,
+        fog: 0.35,
+        dust: 0.85,
+        rain: 0,
+        snow: 0,
+        storm: 0.15,
+        windSpeed: 2.1,
+        rainbow: 0,
+        aurora: 0
+      }
+    },
+    aurora: {
+      label: 'Aurora Sky',
+      params: {
+        sunElevation: -0.78,
+        cloudCover: 0.18,
+        cloudDensity: 0.85,
+        godRays: 0.25,
+        fog: 0,
+        dust: 0,
+        rain: 0,
+        snow: 0,
+        storm: 0,
+        windSpeed: 0.7,
+        rainbow: 0,
+        aurora: 0.95
+      }
     }
   };
 
-  document.querySelectorAll('[data-preset]').forEach((btn) => {
+  const formatSliderVal = (key: keyof ShaderWeatherTarget, val: number): string => {
+    if (key === 'sunElevation' || key === 'sunAzimuth') return val.toFixed(2);
+    if (key === 'windSpeed') return `${val.toFixed(1)}x`;
+    return `${Math.round(val * 100)}%`;
+  };
+
+  const syncSlidersFromState = () => {
+    (Object.keys(currentTarget) as Array<keyof ShaderWeatherTarget>).forEach((key) => {
+      const input = document.querySelector<HTMLInputElement>(`input[data-param="${key}"]`);
+      const label = document.querySelector<HTMLElement>(`[data-val="${key}"]`);
+      const val = currentTarget[key];
+      if (input) input.value = String(val);
+      if (label) label.textContent = formatSliderVal(key, val);
+    });
+
+    const statusEl = document.getElementById('live-status-text');
+    if (statusEl) {
+      statusEl.textContent = `${activeTimeName} · ${activeWeatherName}`;
+    }
+  };
+
+  const pushToShader = () => {
+    syncSlidersFromState();
+    window.dispatchEvent(new CustomEvent('weather:preset', { detail: { ...currentTarget } }));
+  };
+
+  // Time preset clicks
+  document.querySelectorAll<HTMLButtonElement>('[data-time]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const key = btn.getAttribute('data-preset') || 'clear';
-      const p = PRESETS[key];
-      if (!p) return;
+      const key = btn.getAttribute('data-time') || 'afternoon';
+      const t = TIME_PRESETS[key];
+      if (!t) return;
 
-      document.querySelectorAll('.preset-chip').forEach((b) => b.classList.remove('is-active'));
+      document.querySelectorAll('[data-time]').forEach((b) => b.classList.remove('is-active'));
       btn.classList.add('is-active');
+      document
+        .querySelectorAll('#btn-live-host, #btn-live-visitor')
+        .forEach((b) => b.classList.remove('is-active'));
 
-      window.dispatchEvent(new CustomEvent('weather:preset', { detail: p.target }));
+      activeTimeName = t.label;
+      currentTarget.sunElevation = t.sunElevation;
+      currentTarget.sunAzimuth = t.sunAzimuth;
+      currentTarget.godRays = t.godRays;
+      if (key !== 'night' && key !== 'evening') {
+        currentTarget.aurora = 0;
+      }
+      pushToShader();
     });
   });
 
-  // Optional precise browser geolocation button
-  document.getElementById('precise-gps-btn')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (!('geolocation' in navigator)) return;
-    const btn = e.currentTarget as HTMLButtonElement;
-    btn.textContent = 'Locating…';
+  // Weather pattern clicks
+  document.querySelectorAll<HTMLButtonElement>('[data-weather]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-weather') || 'sunny';
+      const w = WEATHER_PRESETS[key];
+      if (!w) return;
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-        const loc = {
-          id: 'visitor' as const,
-          label: 'Your Precise Location',
-          city: visitorWeather?.location.city || 'Current Coordinates',
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          timezone: tz
-        };
-        // Reverse geocode city name via free BigDataCloud client endpoint
-        try {
-          const rev = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${loc.latitude}&longitude=${loc.longitude}&localityLanguage=en`
-          );
-          if (rev.ok) {
-            const revData = await rev.json();
-            loc.city = revData.city || revData.locality || loc.city;
-          }
-        } catch {
-          // keep fallback city name
-        }
+      document.querySelectorAll('[data-weather]').forEach((b) => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      document
+        .querySelectorAll('#btn-live-host, #btn-live-visitor')
+        .forEach((b) => b.classList.remove('is-active'));
 
-        visitorWeather = await fetchWeatherForLocation(loc);
-        renderComparisonCard('visitor', visitorWeather);
-        setActiveSkyMode('visitor');
-        btn.textContent = '✓ GPS Synced';
-      },
-      () => {
-        btn.textContent = 'GPS Blocked';
-      },
-      { timeout: 6000 }
-    );
+      activeWeatherName = w.label;
+      currentTarget = {
+        ...currentTarget,
+        ...w.params
+      };
+
+      // If Aurora is picked during daytime, switch time to Night so it shines clearly
+      if (key === 'aurora') {
+        activeTimeName = 'Night';
+        document.querySelectorAll('[data-time]').forEach((b) => {
+          b.classList.toggle('is-active', b.getAttribute('data-time') === 'night');
+        });
+      }
+      pushToShader();
+    });
   });
 
-  // Initialize both Host & Visitor weather feeds in parallel
-  const initFeeds = async () => {
-    const hostPromise = fetchWeatherForLocation(HOST_LOCATION).then((state) => {
-      hostWeather = state;
-      renderComparisonCard('host', state);
-      if (activeMode === 'host') renderActiveHero(state);
+  // Individual slider adjustments
+  document.querySelectorAll<HTMLInputElement>('input[data-param]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const key = input.getAttribute('data-param') as keyof ShaderWeatherTarget;
+      const val = parseFloat(input.value);
+      currentTarget[key] = val;
+
+      const label = document.querySelector<HTMLElement>(`[data-val="${key}"]`);
+      if (label) label.textContent = formatSliderVal(key, val);
+
+      window.dispatchEvent(new CustomEvent('weather:preset', { detail: { ...currentTarget } }));
     });
+  });
 
-    const visitorPromise = detectVisitorLocation()
-      .then((loc) => fetchWeatherForLocation(loc))
-      .then((state) => {
-        visitorWeather = state;
-        renderComparisonCard('visitor', state);
-        if (activeMode === 'visitor') renderActiveHero(state);
-      });
+  // Reset button
+  document.getElementById('reset-params-btn')?.addEventListener('click', () => {
+    currentTarget = { ...DEFAULT_SHADER_TARGET };
+    activeTimeName = 'Afternoon';
+    activeWeatherName = 'Sunny';
+    document.querySelectorAll('[data-time]').forEach((b) => {
+      b.classList.toggle('is-active', b.getAttribute('data-time') === 'afternoon');
+    });
+    document.querySelectorAll('[data-weather]').forEach((b) => {
+      b.classList.toggle('is-active', b.getAttribute('data-weather') === 'sunny');
+    });
+    pushToShader();
+  });
 
-    await Promise.allSettled([hostPromise, visitorPromise]);
+  // Collapse / Expand Panel button
+  const panel = document.getElementById('sandbox-panel');
+  const toggleBtn = document.getElementById('toggle-panel-btn');
+  toggleBtn?.addEventListener('click', () => {
+    const collapsed = panel?.classList.toggle('is-collapsed');
+    if (toggleBtn) toggleBtn.textContent = collapsed ? 'Show Controls' : 'Hide UI';
+  });
+
+  // Live Location buttons (Nabhi vs Visitor)
+  const applyLiveWeatherState = (state: WeatherState, sourceBtnId: string) => {
+    document
+      .querySelectorAll('[data-time], [data-weather], #btn-live-host, #btn-live-visitor')
+      .forEach((b) => b.classList.remove('is-active'));
+    document.getElementById(sourceBtnId)?.classList.add('is-active');
+
+    const isFog = state.weatherCode === 45 || state.weatherCode === 48;
+    currentTarget = {
+      ...currentTarget,
+      sunElevation: state.sunElevation,
+      sunAzimuth: 0.12,
+      cloudCover: state.cloudCover,
+      cloudDensity: 1.05,
+      godRays: state.isDay ? 1.05 : 0.35,
+      fog: isFog ? 0.7 : 0,
+      dust: 0,
+      rain: state.precipitation,
+      snow: state.snowAmount,
+      storm: state.storminess,
+      windSpeed: Math.max(0.35, Math.min(2.5, state.windSpeed / 14)),
+      rainbow: 0,
+      aurora: 0
+    };
+    activeTimeName = `${state.location.city} (${state.localTimeStr})`;
+    activeWeatherName = `${state.temperature}° ${state.conditionLabel}`;
+    pushToShader();
   };
 
-  initFeeds();
+  document.getElementById('btn-live-host')?.addEventListener('click', () => {
+    if (hostState) applyLiveWeatherState(hostState, 'btn-live-host');
+  });
 
-  // Keep both local clocks ticking every 15 seconds
-  setInterval(() => {
-    if (hostWeather) {
-      hostWeather.localTimeStr = formatTimeInZone(hostWeather.location.timezone);
-      const el = document.getElementById('host-time');
-      if (el) el.textContent = hostWeather.localTimeStr;
-      if (activeMode === 'host') {
-        const activeEl = document.getElementById('active-local-time');
-        if (activeEl) activeEl.textContent = hostWeather.localTimeStr;
-      }
-    }
-    if (visitorWeather) {
-      visitorWeather.localTimeStr = formatTimeInZone(visitorWeather.location.timezone);
-      const el = document.getElementById('visitor-time');
-      if (el) el.textContent = visitorWeather.localTimeStr;
-      if (activeMode === 'visitor') {
-        const activeEl = document.getElementById('active-local-time');
-        if (activeEl) activeEl.textContent = visitorWeather.localTimeStr;
-      }
-    }
-  }, 15000);
+  document.getElementById('btn-live-visitor')?.addEventListener('click', () => {
+    if (visitorState) applyLiveWeatherState(visitorState, 'btn-live-visitor');
+  });
+
+  // Fetch both live locations in background so the buttons show live city & temp
+  fetchWeatherForLocation(HOST_LOCATION).then((state) => {
+    hostState = state;
+    const el = document.getElementById('host-mini-label');
+    if (el) el.textContent = `${state.location.city} ${state.temperature}°`;
+  });
+
+  detectVisitorLocation()
+    .then((loc) => fetchWeatherForLocation(loc))
+    .then((state) => {
+      visitorState = state;
+      const el = document.getElementById('visitor-mini-label');
+      if (el) el.textContent = `${state.location.city} ${state.temperature}°`;
+    });
+
+  // Start in Sunny Afternoon default so user immediately sees clouds + sun rays + bloom
+  pushToShader();
 </script>
 
 <style>
-  .weather-shell {
-    position: relative;
-    z-index: 1;
-    min-height: 100svh;
+  .sandbox-panel {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    z-index: 10;
+    width: min(390px, calc(100vw - 2.5rem));
+    max-height: calc(100svh - 2.5rem);
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    padding: clamp(1.25rem, 3vw, 2.5rem) clamp(1.25rem, 4vw, 3.5rem);
-    color: #ffffff;
-    text-shadow: 0 2px 16px rgba(8, 22, 48, 0.22);
+    background: rgba(12, 22, 38, 0.56);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 22px;
+    color: #fff;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.32);
+    overflow: hidden;
+    transition: width 0.25s ease, background 0.25s ease;
   }
 
-  /* Top Bar */
-  .topbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    justify-content: space-between;
-    align-items: center;
+  .sandbox-panel.is-collapsed {
+    width: auto;
   }
 
-  .brand-group {
+  .sandbox-panel.is-collapsed .panel-body,
+  .sandbox-panel.is-collapsed .panel-title-wrap {
+    display: none;
+  }
+
+  .panel-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
     gap: 0.75rem;
+    padding: 0.85rem 1.1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
   }
 
-  .brand-name {
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.16em;
+  .sandbox-panel.is-collapsed .panel-header {
+    border-bottom: none;
+    padding: 0.5rem 0.65rem;
   }
 
-  .brand-tag {
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    padding: 0.25rem 0.6rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.16);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.24);
-  }
-
-  .controls-bar {
+  .panel-title-wrap {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 0.65rem;
+    gap: 0.5rem;
   }
 
-  .sky-tabs {
-    display: inline-flex;
-    padding: 0.25rem;
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #69f0ae;
+    box-shadow: 0 0 10px #69f0ae;
+  }
+
+  .panel-title {
+    font-size: 0.86rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .collapse-btn {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 0.3rem 0.68rem;
     border-radius: 999px;
-    background: rgba(15, 32, 58, 0.34);
-    backdrop-filter: blur(20px) saturate(150%);
-    -webkit-backdrop-filter: blur(20px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
+    cursor: pointer;
+    transition: background 0.2s ease;
   }
 
-  .sky-tab {
+  .collapse-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  .panel-body {
+    padding: 0.95rem 1.1rem 1.15rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    scrollbar-width: thin;
+  }
+
+  .control-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.48rem;
+  }
+
+  .section-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  .live-readout {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+    color: #9be7ff;
+  }
+
+  .reset-link {
     appearance: none;
     border: none;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.78);
-    font: inherit;
-    font-size: 0.8rem;
-    font-weight: 500;
-    padding: 0.45rem 0.95rem;
-    border-radius: 999px;
+    background: none;
+    color: #9be7ff;
+    font-size: 0.7rem;
     cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    transition: all 0.25s ease;
+    text-decoration: underline;
   }
 
-  .sky-tab.is-active {
-    background: rgba(255, 255, 255, 0.22);
-    color: #ffffff;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  .chip-grid {
+    display: grid;
+    gap: 0.38rem;
   }
 
-  .tab-meta {
-    font-size: 0.72rem;
-    opacity: 0.78;
-    padding-left: 0.2rem;
+  .chip-grid.cols-2 {
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
+  .chip-grid.cols-3 {
+    grid-template-columns: repeat(3, 1fr);
   }
 
-  .live-dot {
-    background: #69f0ae;
-    box-shadow: 0 0 8px #69f0ae;
-  }
-
-  .visitor-dot {
-    background: #ffd54f;
-    box-shadow: 0 0 8px #ffd54f;
-  }
-
-  .shader-presets {
-    display: inline-flex;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-  }
-
-  .preset-chip {
+  .ctrl-chip {
     appearance: none;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    background: rgba(15, 32, 58, 0.28);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
     color: rgba(255, 255, 255, 0.88);
     font: inherit;
-    font-size: 0.74rem;
-    padding: 0.42rem 0.75rem;
-    border-radius: 999px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .preset-chip:hover,
-  .preset-chip.is-active {
-    background: rgba(255, 255, 255, 0.28);
-    border-color: rgba(255, 255, 255, 0.5);
-    color: #fff;
-  }
-
-  /* Main Layout Grid */
-  .content-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 2rem;
-    align-items: end;
-    margin-top: auto;
-    padding-top: 2.5rem;
-  }
-
-  @media (min-width: 980px) {
-    .content-grid {
-      grid-template-columns: minmax(280px, 0.9fr) minmax(460px, 1.1fr);
-      gap: 3rem;
-    }
-  }
-
-  /* One UI Hero Readout */
-  .hero-weather {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    padding-bottom: 0.5rem;
-  }
-
-  .location-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-  .pin-icon {
-    width: 1.4rem;
-    height: 1.4rem;
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
-  }
-
-  .city-name {
-    font-size: clamp(1.75rem, 3.2vw, 2.45rem);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-  }
-
-  .role-badge {
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 0.22rem 0.65rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-  }
-
-  .time-subtitle {
-    margin-top: 0.35rem;
-    font-size: 0.88rem;
-    color: rgba(255, 255, 255, 0.84);
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-  }
-
-  .temp-hero {
-    font-size: clamp(5.2rem, 11vw, 8.2rem);
-    font-weight: 200;
-    line-height: 0.95;
-    letter-spacing: -0.05em;
-    margin-top: 0.6rem;
-    background: linear-gradient(180deg, #ffffff 15%, rgba(235, 248, 255, 0.76) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 8px 28px rgba(14, 42, 86, 0.22));
-  }
-
-  .condition-hero {
-    font-size: clamp(1.45rem, 2.4vw, 2rem);
+    font-size: 0.73rem;
     font-weight: 500;
-    margin-top: 0.25rem;
-    color: rgba(255, 255, 255, 0.96);
-  }
-
-  .high-low-row {
-    display: flex;
-    gap: 0.9rem;
-    margin-top: 0.9rem;
-    font-size: 1.02rem;
-    color: rgba(255, 255, 255, 0.92);
-  }
-
-  .feels-like {
-    margin-top: 0.25rem;
-    font-size: 0.95rem;
-    color: rgba(255, 255, 255, 0.84);
-  }
-
-  /* One UI Frosted Glass Cards */
-  .cards-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 0.95rem;
-  }
-
-  .glass-card {
-    background: linear-gradient(
-      145deg,
-      rgba(38, 66, 56, 0.46) 0%,
-      rgba(22, 42, 54, 0.54) 100%
-    );
-    backdrop-filter: blur(26px) saturate(165%);
-    -webkit-backdrop-filter: blur(26px) saturate(165%);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 26px;
-    padding: 1.25rem 1.4rem;
-    box-shadow:
-      0 18px 42px rgba(6, 16, 30, 0.24),
-      inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  }
-
-  .card-headline {
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.96);
-  }
-
-  .card-divider {
-    height: 1px;
-    background: rgba(255, 255, 255, 0.16);
-    margin: 0.85rem 0 1rem;
-  }
-
-  :global(.hourly-columns) {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    text-align: center;
-    gap: 0.25rem;
-  }
-
-  :global(.hour-col) {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.35rem;
-  }
-
-  :global(.hour-time) {
-    font-size: 0.78rem;
-    color: rgba(255, 255, 255, 0.78);
-  }
-
-  :global(.wx-icon) {
-    width: 28px;
-    height: 28px;
-    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.22));
-  }
-
-  :global(.hour-temp) {
-    font-size: 0.92rem;
-    font-weight: 600;
-  }
-
-  .curve-wrap {
-    width: 100%;
-    height: 58px;
-    margin: 0.15rem 0;
-  }
-
-  #temp-curve-svg {
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-  }
-
-  :global(.humidity-row) {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    text-align: center;
-    font-size: 0.74rem;
-    color: rgba(255, 255, 255, 0.78);
-    margin-top: 0.15rem;
-  }
-
-  :global(.hum-col) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.2rem;
-  }
-
-  :global(.drop) {
-    font-size: 0.65rem;
-    opacity: 0.85;
-  }
-
-  /* Dual Location Cards */
-  .dual-cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.9rem;
-  }
-
-  @media (max-width: 620px) {
-    .dual-cards {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .location-compare-card {
+    padding: 0.44rem 0.5rem;
+    border-radius: 11px;
     cursor: pointer;
-    transition:
-      transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-      border-color 0.25s ease,
-      background 0.25s ease;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 0.95rem;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.18s ease;
   }
 
-  .location-compare-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(255, 255, 255, 0.42);
+  .ctrl-chip:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.36);
   }
 
-  .location-compare-card.is-selected {
-    border-color: rgba(255, 255, 255, 0.65);
-    background: linear-gradient(
-      145deg,
-      rgba(52, 92, 76, 0.56) 0%,
-      rgba(28, 56, 74, 0.64) 100%
-    );
-  }
-
-  .compare-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-
-  .eyebrow-with-action {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    flex-wrap: wrap;
-  }
-
-  .compare-eyebrow {
-    font-size: 0.66rem;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    color: rgba(255, 255, 255, 0.72);
-    display: block;
-  }
-
-  .gps-btn {
-    appearance: none;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(255, 255, 255, 0.14);
-    color: #fff;
-    font-size: 0.64rem;
-    padding: 0.12rem 0.45rem;
-    border-radius: 999px;
-    cursor: pointer;
-  }
-
-  .gps-btn:hover {
+  .ctrl-chip.is-active {
     background: rgba(255, 255, 255, 0.28);
+    border-color: rgba(255, 255, 255, 0.75);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   }
 
-  .compare-city {
-    font-size: 1.2rem;
-    font-weight: 600;
-    margin-top: 0.2rem;
+  .sliders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.42rem;
   }
 
-  .compare-clock {
-    font-size: 0.78rem;
+  .slider-row {
+    display: grid;
+    grid-template-columns: 118px 1fr 44px;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.74rem;
+  }
+
+  .slider-name {
+    color: rgba(255, 255, 255, 0.88);
+    white-space: nowrap;
+  }
+
+  .slider-val {
+    text-align: right;
     font-variant-numeric: tabular-nums;
-    padding: 0.22rem 0.55rem;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.22);
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.71rem;
   }
 
-  .compare-bottom {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-  }
-
-  .compare-condition {
-    display: flex;
-    flex-direction: column;
-    gap: 0.18rem;
-    font-size: 0.88rem;
-    color: rgba(255, 255, 255, 0.9);
-  }
-
-  .compare-hl {
-    font-size: 0.76rem;
-    color: rgba(255, 255, 255, 0.72);
-  }
-
-  .compare-temp {
-    font-size: 2.3rem;
-    font-weight: 300;
-    line-height: 1;
-    letter-spacing: -0.03em;
-  }
-
-  /* Metrics Strip */
-  .metrics-strip {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.95rem 1.4rem;
-    gap: 0.75rem;
-  }
-
-  .metric-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-
-  .metric-label {
-    font-size: 0.72rem;
-    color: rgba(255, 255, 255, 0.68);
-  }
-
-  .metric-val {
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-
-  .metric-sep {
-    width: 1px;
-    height: 24px;
-    background: rgba(255, 255, 255, 0.16);
-  }
-
-  @media (max-width: 620px) {
-    .metric-sep {
-      display: none;
-    }
+  input[type='range'] {
+    width: 100%;
+    accent-color: #7ad7ff;
+    height: 4px;
+    cursor: pointer;
   }
 </style>

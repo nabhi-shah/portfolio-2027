@@ -8,12 +8,37 @@ import type { WeatherState } from '@/config/weather';
 
 export interface ShaderWeatherTarget {
   sunElevation: number;
+  sunAzimuth: number;
   cloudCover: number;
+  cloudDensity: number;
+  godRays: number;
+  fog: number;
+  dust: number;
   rain: number;
-  storm: number;
   snow: number;
+  storm: number;
   windSpeed: number;
+  rainbow: number;
+  aurora: number;
+  bloomStrength: number;
 }
+
+export const DEFAULT_SHADER_TARGET: ShaderWeatherTarget = {
+  sunElevation: 0.85,
+  sunAzimuth: 0.11,
+  cloudCover: 0.24,
+  cloudDensity: 1.0,
+  godRays: 1.0,
+  fog: 0.0,
+  dust: 0.0,
+  rain: 0.0,
+  snow: 0.0,
+  storm: 0.0,
+  windSpeed: 1.0,
+  rainbow: 0.0,
+  aurora: 0.0,
+  bloomStrength: 0.92
+};
 
 export class ShaderStage {
   private container: HTMLElement;
@@ -39,17 +64,8 @@ export class ShaderStage {
   private mouseTarget = new Vec2(0.5, 0.5);
   private mouseCurrent = new Vec2(0.5, 0.5);
 
-  // Smoothly interpolated weather state (defaults to bright clear day like the Paris 29° reference)
-  private currentParams: ShaderWeatherTarget = {
-    sunElevation: 0.78,
-    cloudCover: 0.22,
-    rain: 0.0,
-    storm: 0.0,
-    snow: 0.0,
-    windSpeed: 1.0
-  };
-
-  private targetParams: ShaderWeatherTarget = { ...this.currentParams };
+  private currentParams: ShaderWeatherTarget = { ...DEFAULT_SHADER_TARGET };
+  private targetParams: ShaderWeatherTarget = { ...DEFAULT_SHADER_TARGET };
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -75,11 +91,18 @@ export class ShaderStage {
         uResolution: { value: new Vec2(gl.canvas.width, gl.canvas.height) },
         uMouse: { value: this.mouseCurrent },
         uSunElevation: { value: this.currentParams.sunElevation },
+        uSunAzimuth: { value: this.currentParams.sunAzimuth },
         uCloudCover: { value: this.currentParams.cloudCover },
+        uCloudDensity: { value: this.currentParams.cloudDensity },
+        uGodRays: { value: this.currentParams.godRays },
+        uFog: { value: this.currentParams.fog },
+        uDust: { value: this.currentParams.dust },
         uRain: { value: this.currentParams.rain },
-        uStorm: { value: this.currentParams.storm },
         uSnow: { value: this.currentParams.snow },
-        uWindSpeed: { value: this.currentParams.windSpeed }
+        uStorm: { value: this.currentParams.storm },
+        uWindSpeed: { value: this.currentParams.windSpeed },
+        uRainbow: { value: this.currentParams.rainbow },
+        uAurora: { value: this.currentParams.aurora }
       }
     });
 
@@ -88,8 +111,8 @@ export class ShaderStage {
       fragment: bloomExtractFrag,
       uniforms: {
         tMap: { value: this.sceneTarget.texture },
-        uThreshold: { value: 0.72 },
-        uKnee: { value: 0.55 }
+        uThreshold: { value: 0.92 },
+        uKnee: { value: 0.45 }
       }
     });
 
@@ -110,7 +133,7 @@ export class ShaderStage {
         tScene: { value: this.sceneTarget.texture },
         tBloomTight: { value: this.bloomTightA.texture },
         tBloomWide: { value: this.bloomWideA.texture },
-        uBloomStrength: { value: 0.92 },
+        uBloomStrength: { value: this.currentParams.bloomStrength },
         uResolution: { value: new Vec2(gl.canvas.width, gl.canvas.height) },
         uTime: { value: 0 }
       }
@@ -151,18 +174,34 @@ export class ShaderStage {
   }
 
   public setWeatherState(state: WeatherState): void {
+    const isFog = state.weatherCode === 45 || state.weatherCode === 48;
     this.targetParams = {
+      ...this.targetParams,
       sunElevation: state.sunElevation,
+      sunAzimuth: 0.11,
       cloudCover: state.cloudCover,
+      cloudDensity: 1.0,
+      godRays: state.isDay ? 1.0 : 0.4,
+      fog: isFog ? 0.65 : 0.0,
+      dust: 0.0,
       rain: state.precipitation,
-      storm: state.storminess,
       snow: state.snowAmount,
-      windSpeed: Math.max(0.35, Math.min(2.4, state.windSpeed / 14))
+      storm: state.storminess,
+      windSpeed: Math.max(0.35, Math.min(2.4, state.windSpeed / 14)),
+      rainbow: 0.0,
+      aurora: 0.0
     };
   }
 
-  public setPreset(preset: ShaderWeatherTarget): void {
-    this.targetParams = { ...preset };
+  public setPreset(preset: Partial<ShaderWeatherTarget>): void {
+    this.targetParams = {
+      ...this.targetParams,
+      ...preset
+    };
+  }
+
+  public getTargetParams(): ShaderWeatherTarget {
+    return { ...this.targetParams };
   }
 
   private bindEvents(): void {
@@ -209,12 +248,10 @@ export class ShaderStage {
       radiusScale / source.height
     );
 
-    // Horizontal pass
     this.blurProgram.uniforms.tMap.value = source.texture;
     this.blurProgram.uniforms.uDirection.value.set(1, 0);
     this.renderer.render({ scene: this.postMesh, target: temp });
 
-    // Vertical pass
     this.blurProgram.uniforms.tMap.value = temp.texture;
     this.blurProgram.uniforms.uDirection.value.set(0, 1);
     this.renderer.render({ scene: this.postMesh, target: dest });
@@ -230,31 +267,32 @@ export class ShaderStage {
 
     const timeSec = t * 0.001;
 
-    // Smooth pointer damping
     this.mouseCurrent.x += (this.mouseTarget.x - this.mouseCurrent.x) * 0.05;
     this.mouseCurrent.y += (this.mouseTarget.y - this.mouseCurrent.y) * 0.05;
 
-    // Smooth weather state transitions
-    const lerpSpeed = 0.045;
-    this.currentParams.sunElevation +=
-      (this.targetParams.sunElevation - this.currentParams.sunElevation) * lerpSpeed;
-    this.currentParams.cloudCover +=
-      (this.targetParams.cloudCover - this.currentParams.cloudCover) * lerpSpeed;
-    this.currentParams.rain += (this.targetParams.rain - this.currentParams.rain) * lerpSpeed;
-    this.currentParams.storm += (this.targetParams.storm - this.currentParams.storm) * lerpSpeed;
-    this.currentParams.snow += (this.targetParams.snow - this.currentParams.snow) * lerpSpeed;
-    this.currentParams.windSpeed +=
-      (this.targetParams.windSpeed - this.currentParams.windSpeed) * lerpSpeed;
+    const lerp = 0.06;
+    const keys = Object.keys(this.targetParams) as Array<keyof ShaderWeatherTarget>;
+    for (const k of keys) {
+      this.currentParams[k] += (this.targetParams[k] - this.currentParams[k]) * lerp;
+    }
 
-    // Update scene uniforms
     const u = this.sceneProgram.uniforms;
     u.uTime.value = timeSec;
     u.uSunElevation.value = this.currentParams.sunElevation;
+    u.uSunAzimuth.value = this.currentParams.sunAzimuth;
     u.uCloudCover.value = this.currentParams.cloudCover;
+    u.uCloudDensity.value = this.currentParams.cloudDensity;
+    u.uGodRays.value = this.currentParams.godRays;
+    u.uFog.value = this.currentParams.fog;
+    u.uDust.value = this.currentParams.dust;
     u.uRain.value = this.currentParams.rain;
-    u.uStorm.value = this.currentParams.storm;
     u.uSnow.value = this.currentParams.snow;
+    u.uStorm.value = this.currentParams.storm;
     u.uWindSpeed.value = this.currentParams.windSpeed;
+    u.uRainbow.value = this.currentParams.rainbow;
+    u.uAurora.value = this.currentParams.aurora;
+
+    this.compositeProgram.uniforms.uBloomStrength.value = this.currentParams.bloomStrength;
 
     // 1. Render Volumetric Sky, 3D Clouds & God Rays to offscreen sceneTarget
     this.renderer.render({ scene: this.sceneMesh, target: this.sceneTarget });
@@ -265,12 +303,12 @@ export class ShaderStage {
     this.renderer.render({ scene: this.postMesh, target: this.bloomTightA });
     this.renderer.render({ scene: this.postMesh, target: this.bloomWideA });
 
-    // 3. Separable Gaussian/Kawase Blur passes (Tight + Wide Optical Halo)
+    // 3. Separable Gaussian/Kawase Blur passes
     this.runBlurPass(this.bloomTightA, this.bloomTightB, this.bloomTightA, 1.15);
     this.runBlurPass(this.bloomWideA, this.bloomWideB, this.bloomWideA, 1.85);
     this.runBlurPass(this.bloomWideA, this.bloomWideB, this.bloomWideA, 2.65);
 
-    // 4. Final ACES Tone-Mapped + Bloom Composite to screen
+    // 4. Final ACES Tone-Mapped + Bloom Composite
     this.postMesh.program = this.compositeProgram;
     this.compositeProgram.uniforms.tScene.value = this.sceneTarget.texture;
     this.compositeProgram.uniforms.tBloomTight.value = this.bloomTightA.texture;

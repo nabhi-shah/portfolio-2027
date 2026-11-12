@@ -1,0 +1,54 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = 'Nabhi Shah — Portfolio 2027',
+  description = 'Creative Engineering, Interactive Shaders & Design Systems.'
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg: #07080c;
+    --fg: #f3f5f8;
+    --muted: rgba(243, 245, 248, 0.58);
+    --border: rgba(243, 245, 248, 0.12);
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    width: 100%;
+    min-height: 100%;
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+</style>

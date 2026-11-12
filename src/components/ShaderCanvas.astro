@@ -1,0 +1,42 @@
+---
+---
+
+<div id="webgl-stage" class="webgl-stage" aria-hidden="true"></div>
+
+<script>
+  const mountShader = async () => {
+    const container = document.getElementById('webgl-stage');
+    if (!container) return;
+
+    const { ShaderStage } = await import('@/webgl/ShaderStage');
+    new ShaderStage(container);
+    container.classList.add('is-ready');
+  };
+
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(() => mountShader(), { timeout: 200 });
+  } else {
+    requestAnimationFrame(() => setTimeout(mountShader, 0));
+  }
+</script>
+
+<style>
+  .webgl-stage {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .webgl-stage.is-ready {
+    opacity: 1;
+  }
+
+  .webgl-stage :global(canvas) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+</style>

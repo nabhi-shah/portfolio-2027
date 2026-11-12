@@ -42,16 +42,16 @@ export const DEFAULT_SHADER_TARGET: ShaderWeatherTarget = {
 
 export class ShaderStage {
   private container: HTMLElement;
-  private renderer: Renderer;
-  private geometry: Triangle;
+  private renderer!: Renderer;
+  private geometry!: Triangle;
 
-  private sceneProgram: Program;
-  private extractProgram: Program;
-  private blurProgram: Program;
-  private compositeProgram: Program;
+  private sceneProgram!: Program;
+  private extractProgram!: Program;
+  private blurProgram!: Program;
+  private compositeProgram!: Program;
 
-  private sceneMesh: Mesh;
-  private postMesh: Mesh;
+  private sceneMesh!: Mesh;
+  private postMesh!: Mesh;
 
   private sceneTarget!: RenderTarget;
   private bloomTightA!: RenderTarget;
@@ -61,17 +61,32 @@ export class ShaderStage {
 
   private rafId = 0;
   private isVisible = true;
+  private isContextLost = false;
+  private resizePending = false;
+
   private mouseTarget = new Vec2(0.5, 0.5);
   private mouseCurrent = new Vec2(0.5, 0.5);
 
   private currentParams: ShaderWeatherTarget = { ...DEFAULT_SHADER_TARGET };
   private targetParams: ShaderWeatherTarget = { ...DEFAULT_SHADER_TARGET };
 
+  // Adaptive FPS & Dynamic Resolution Scaling
+  private qualityScale = 1.0;
+  private frameCount = 0;
+  private lastTime = 0;
+  private accumulatedTime = 0;
+
   constructor(container: HTMLElement) {
     this.container = container;
+    this.initWebGL();
+    this.bindEvents();
+    this.rafId = requestAnimationFrame(this.update);
+  }
 
+  private initWebGL(): void {
+    // Clamped DPR (max 1.25): balances crisp text/geometry with 60-120fps volumetric rendering
     this.renderer = new Renderer({
-      dpr: Math.min(window.devicePixelRatio, 1.5),
+      dpr: Math.min(window.devicePixelRatio || 1, 1.25),
       alpha: false,
       antialias: false,
       powerPreference: 'high-performance'
@@ -142,16 +157,27 @@ export class ShaderStage {
     this.sceneMesh = new Mesh(gl, { geometry: this.geometry, program: this.sceneProgram });
     this.postMesh = new Mesh(gl, { geometry: this.geometry, program: this.extractProgram });
 
-    this.onResize();
-    this.bindEvents();
-    this.rafId = requestAnimationFrame(this.update);
+    this.onResizeImmediate();
   }
 
   private initRenderTargets(width: number, height: number): void {
     const { gl } = this.renderer;
-    const dpr = this.renderer.dpr;
-    const w = Math.max(1, Math.floor(width * dpr));
-    const h = Math.max(1, Math.floor(height * dpr));
+    const baseDpr = Math.min(window.devicePixelRatio || 1, 1.25);
+    const dpr = baseDpr * this.qualityScale;
+
+    // Maximum internal dimension clamp (1920px max)
+    // Prevents 4K / 5K displays on Windows and Mac from running unconstrained multi-million pixel passes
+    let rawW = Math.max(1, Math.floor(width * dpr));
+    let rawH = Math.max(1, Math.floor(height * dpr));
+    const maxDim = 1920;
+    if (rawW > maxDim || rawH > maxDim) {
+      const scale = maxDim / Math.max(rawW, rawH);
+      rawW = Math.floor(rawW * scale);
+      rawH = Math.floor(rawH * scale);
+    }
+
+    const w = rawW;
+    const h = rawH;
 
     const halfW = Math.max(1, Math.floor(w * 0.5));
     const halfH = Math.max(1, Math.floor(h * 0.5));
@@ -205,12 +231,39 @@ export class ShaderStage {
   }
 
   private bindEvents(): void {
-    window.addEventListener('resize', this.onResize, { passive: true });
+    window.addEventListener('resize', this.onResizeDebounced, { passive: true });
     window.addEventListener('pointermove', this.onPointerMove, { passive: true });
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+
+    // Cross-Platform Context Loss / Restore Handling
+    const canvas = this.renderer.gl.canvas;
+    canvas.addEventListener('webglcontextlost', this.onContextLost, false);
+    canvas.addEventListener('webglcontextrestored', this.onContextRestored, false);
   }
 
-  private onResize = (): void => {
+  private onContextLost = (e: Event): void => {
+    e.preventDefault();
+    this.isContextLost = true;
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+  };
+
+  private onContextRestored = (): void => {
+    this.isContextLost = false;
+    this.initWebGL();
+    this.rafId = requestAnimationFrame(this.update);
+  };
+
+  private onResizeDebounced = (): void => {
+    if (this.resizePending) return;
+    this.resizePending = true;
+    requestAnimationFrame(() => {
+      this.resizePending = false;
+      this.onResizeImmediate();
+    });
+  };
+
+  private onResizeImmediate = (): void => {
+    if (this.isContextLost) return;
     const width = window.innerWidth;
     const height = window.innerHeight;
     this.renderer.setSize(width, height);
@@ -218,8 +271,12 @@ export class ShaderStage {
 
     const canvasW = this.renderer.gl.canvas.width;
     const canvasH = this.renderer.gl.canvas.height;
-    this.sceneProgram.uniforms.uResolution.value.set(canvasW, canvasH);
-    this.compositeProgram.uniforms.uResolution.value.set(canvasW, canvasH);
+    if (this.sceneProgram) {
+      this.sceneProgram.uniforms.uResolution.value.set(canvasW, canvasH);
+    }
+    if (this.compositeProgram) {
+      this.compositeProgram.uniforms.uResolution.value.set(canvasW, canvasH);
+    }
   };
 
   private onPointerMove = (e: PointerEvent): void => {
@@ -231,7 +288,8 @@ export class ShaderStage {
 
   private onVisibilityChange = (): void => {
     this.isVisible = !document.hidden;
-    if (this.isVisible && !this.rafId) {
+    if (this.isVisible && !this.rafId && !this.isContextLost) {
+      this.lastTime = performance.now();
       this.rafId = requestAnimationFrame(this.update);
     }
   };
@@ -257,19 +315,51 @@ export class ShaderStage {
     this.renderer.render({ scene: this.postMesh, target: dest });
   }
 
+  private monitorFramePerformance(now: number): void {
+    if (this.lastTime === 0) {
+      this.lastTime = now;
+      return;
+    }
+    const delta = now - this.lastTime;
+    this.lastTime = now;
+    this.accumulatedTime += delta;
+    this.frameCount++;
+
+    // Evaluate average FPS every 45 frames (~0.75 seconds)
+    if (this.frameCount >= 45) {
+      const avgFps = (this.frameCount * 1000) / this.accumulatedTime;
+      this.frameCount = 0;
+      this.accumulatedTime = 0;
+
+      // If FPS drops below 45 (e.g. low-power Windows battery mode or older iGPU), throttle resolution smoothly
+      if (avgFps < 45 && this.qualityScale > 0.7) {
+        this.qualityScale = Math.max(0.7, this.qualityScale - 0.1);
+        this.onResizeImmediate();
+      } else if (avgFps >= 56 && this.qualityScale < 1.0) {
+        this.qualityScale = Math.min(1.0, this.qualityScale + 0.1);
+        this.onResizeImmediate();
+      }
+    }
+  }
+
   private update = (t: number): void => {
-    if (!this.isVisible) {
+    if (!this.isVisible || this.isContextLost) {
       this.rafId = 0;
       return;
     }
 
     this.rafId = requestAnimationFrame(this.update);
 
+    const now = performance.now();
+    this.monitorFramePerformance(now);
+
     const timeSec = t * 0.001;
 
+    // Responsive pointer damping
     this.mouseCurrent.x += (this.mouseTarget.x - this.mouseCurrent.x) * 0.05;
     this.mouseCurrent.y += (this.mouseTarget.y - this.mouseCurrent.y) * 0.05;
 
+    // Smooth uniform state interpolation
     const lerp = 0.06;
     const keys = Object.keys(this.targetParams) as Array<keyof ShaderWeatherTarget>;
     for (const k of keys) {
@@ -303,12 +393,12 @@ export class ShaderStage {
     this.renderer.render({ scene: this.postMesh, target: this.bloomTightA });
     this.renderer.render({ scene: this.postMesh, target: this.bloomWideA });
 
-    // 3. Separable Gaussian/Kawase Blur passes
+    // 3. Separable Gaussian/Kawase Blur passes (Tight + Wide Optical Halo)
     this.runBlurPass(this.bloomTightA, this.bloomTightB, this.bloomTightA, 1.15);
     this.runBlurPass(this.bloomWideA, this.bloomWideB, this.bloomWideA, 1.85);
     this.runBlurPass(this.bloomWideA, this.bloomWideB, this.bloomWideA, 2.65);
 
-    // 4. Final ACES Tone-Mapped + Bloom Composite
+    // 4. Final ACES Tone-Mapped + Bloom Composite to screen
     this.postMesh.program = this.compositeProgram;
     this.compositeProgram.uniforms.tScene.value = this.sceneTarget.texture;
     this.compositeProgram.uniforms.tBloomTight.value = this.bloomTightA.texture;
@@ -319,9 +409,13 @@ export class ShaderStage {
 
   public destroy(): void {
     cancelAnimationFrame(this.rafId);
-    window.removeEventListener('resize', this.onResize);
+    window.removeEventListener('resize', this.onResizeDebounced);
     window.removeEventListener('pointermove', this.onPointerMove);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
-    this.renderer.gl.canvas.remove();
+
+    const canvas = this.renderer.gl.canvas;
+    canvas.removeEventListener('webglcontextlost', this.onContextLost);
+    canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
+    canvas.remove();
   }
 }

@@ -106,7 +106,7 @@ export function decodeWMO(code: number, cloudCoverPct = 18): WMOInfo {
 
   return {
     label: 'Clear',
-    summary: (_t, max, min) => `pleasant atmospheric conditions. High ${max}° · Low ${min}°`,
+    summary: (_t, max, min) => `Pleasant atmospheric conditions. High ${max}° · Low ${min}°`,
     clouds: 0.25,
     rain: 0,
     storm: 0,
@@ -144,7 +144,6 @@ export function getFractionalHourInZone(timezone: string, date = new Date()): nu
 }
 
 export function computeSunPosition(fractionalHour: number, sunriseHour = 6.5, sunsetHour = 19.5) {
-  // Returns sunElevation in [-1, 1] (>0 is daytime, 0 is horizon/golden hour, <0 is night)
   const dayLength = Math.max(1, sunsetHour - sunriseHour);
   if (fractionalHour >= sunriseHour && fractionalHour <= sunsetHour) {
     const progress = (fractionalHour - sunriseHour) / dayLength; // 0..1
@@ -154,7 +153,6 @@ export function computeSunPosition(fractionalHour: number, sunriseHour = 6.5, su
       sunAzimuth: progress
     };
   } else {
-    // Nighttime
     let nightProgress = 0.5;
     const nightLength = Math.max(1, 24 - dayLength);
     if (fractionalHour > sunsetHour) {
@@ -173,27 +171,23 @@ export function computeSunPosition(fractionalHour: number, sunriseHour = 6.5, su
 export async function detectVisitorLocation(): Promise<LocationConfig> {
   const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-  // Try fast IP geolocation endpoints (no permission prompt required)
+  // Check sessionStorage cache first for 0ms instantaneous load
+  try {
+    const cached = sessionStorage.getItem('wx_visitor_loc');
+    if (cached) {
+      const parsed = JSON.parse(cached) as LocationConfig;
+      if (parsed && parsed.latitude && parsed.longitude) {
+        return parsed;
+      }
+    }
+  } catch {
+    // sessionStorage unavailable
+  }
+
   const endpoints = [
     async (): Promise<LocationConfig> => {
-      const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(3500) });
-      if (!res.ok) throw new Error('ipapi failed');
-      const data = await res.json();
-      if (!data.latitude || !data.longitude) throw new Error('invalid coords');
-      return {
-        id: 'visitor',
-        label: 'Your Location',
-        city: data.city || 'Local Sky',
-        region: data.region_code || data.region,
-        country: data.country_code || data.country_name,
-        latitude: Number(data.latitude),
-        longitude: Number(data.longitude),
-        timezone: data.timezone || browserTz
-      };
-    },
-    async (): Promise<LocationConfig> => {
       const res = await fetch('https://get.geojs.io/v1/ip/geo.json', {
-        signal: AbortSignal.timeout(3500)
+        signal: AbortSignal.timeout(2800)
       });
       if (!res.ok) throw new Error('geojs failed');
       const data = await res.json();
@@ -207,20 +201,40 @@ export async function detectVisitorLocation(): Promise<LocationConfig> {
         longitude: Number(data.longitude),
         timezone: data.timezone || browserTz
       };
+    },
+    async (): Promise<LocationConfig> => {
+      const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(2800) });
+      if (!res.ok) throw new Error('ipapi failed');
+      const data = await res.json();
+      if (!data.latitude || !data.longitude) throw new Error('invalid coords');
+      return {
+        id: 'visitor',
+        label: 'Your Location',
+        city: data.city || 'Local Sky',
+        region: data.region_code || data.region,
+        country: data.country_code || data.country_name,
+        latitude: Number(data.latitude),
+        longitude: Number(data.longitude),
+        timezone: data.timezone || browserTz
+      };
     }
   ];
 
   for (const fn of endpoints) {
     try {
-      return await fn();
+      const loc = await fn();
+      try {
+        sessionStorage.setItem('wx_visitor_loc', JSON.stringify(loc));
+      } catch {}
+      return loc;
     } catch {
-      // try next fallback
+      // try next
     }
   }
 
-  // Fallback derived from browser timezone
+  // Graceful fallback from browser timezone
   const fallbackCity = browserTz.split('/').pop()?.replace(/_/g, ' ') || 'San Francisco';
-  return {
+  const fallbackLoc: LocationConfig = {
     id: 'visitor',
     label: 'Your Location',
     city: fallbackCity,
@@ -228,9 +242,27 @@ export async function detectVisitorLocation(): Promise<LocationConfig> {
     longitude: -122.4194,
     timezone: browserTz
   };
+  return fallbackLoc;
 }
 
 export async function fetchWeatherForLocation(loc: LocationConfig): Promise<WeatherState> {
+  const fractionalHour = getFractionalHourInZone(loc.timezone);
+  const localTimeStr = formatTimeInZone(loc.timezone);
+
+  // Check 5-minute memory/session cache
+  const cacheKey = `wx_data_${loc.latitude.toFixed(2)}_${loc.longitude.toFixed(2)}`;
+  try {
+    const raw = sessionStorage.getItem(cacheKey);
+    if (raw) {
+      const entry = JSON.parse(raw);
+      if (Date.now() - entry.timestamp < 5 * 60 * 1000) {
+        const state = entry.data as WeatherState;
+        state.localTimeStr = localTimeStr;
+        return state;
+      }
+    }
+  } catch {}
+
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.set('latitude', String(loc.latitude));
   url.searchParams.set('longitude', String(loc.longitude));
@@ -238,19 +270,13 @@ export async function fetchWeatherForLocation(loc: LocationConfig): Promise<Weat
     'current',
     'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,cloud_cover,wind_speed_10m'
   );
-  url.searchParams.set(
-    'hourly',
-    'temperature_2m,relative_humidity_2m,weather_code'
-  );
+  url.searchParams.set('hourly', 'temperature_2m,relative_humidity_2m,weather_code');
   url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,sunrise,sunset');
   url.searchParams.set('timezone', loc.timezone || 'auto');
   url.searchParams.set('forecast_days', '2');
 
-  const fractionalHour = getFractionalHourInZone(loc.timezone);
-  const localTimeStr = formatTimeInZone(loc.timezone);
-
   try {
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(4500) });
     if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`);
     const data = await res.json();
 
@@ -267,7 +293,6 @@ export async function fetchWeatherForLocation(loc: LocationConfig): Promise<Weat
     const windSpeed = Math.round(current.wind_speed_10m ?? 9);
     const humidity = Math.round(current.relative_humidity_2m ?? 58);
 
-    // Parse sunrise & sunset hours
     const parseHour = (iso?: string, fallback = 6.5) => {
       if (!iso || !iso.includes('T')) return fallback;
       const [h, m] = iso.split('T')[1].split(':').map(Number);
@@ -282,10 +307,8 @@ export async function fetchWeatherForLocation(loc: LocationConfig): Promise<Weat
       sunsetHour
     );
     const isDay = Boolean(current.is_day ?? (sunElevation >= -0.05 ? 1 : 0));
-
     const wmo = decodeWMO(weatherCode, cloudCoverPct);
 
-    // Build next 6 hourly slots starting from current hour
     const nowHourIndex = Math.max(0, Math.floor(fractionalHour));
     const hourlySlots: WeatherState['hourly'] = [];
     for (let i = 0; i < 6; i++) {
@@ -302,7 +325,7 @@ export async function fetchWeatherForLocation(loc: LocationConfig): Promise<Weat
       });
     }
 
-    return {
+    const state: WeatherState = {
       location: loc,
       temperature: temp,
       feelsLike,
@@ -323,37 +346,42 @@ export async function fetchWeatherForLocation(loc: LocationConfig): Promise<Weat
       localTimeStr,
       hourly: hourlySlots
     };
+
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: state }));
+    } catch {}
+
+    return state;
   } catch {
-    // Graceful offline / API fallback
     const { sunElevation, sunAzimuth } = computeSunPosition(fractionalHour, 6.5, 19.5);
     const isDay = sunElevation >= -0.05;
     const wmo = decodeWMO(1, 22);
     return {
       location: loc,
-      temperature: 26,
-      feelsLike: 28,
-      tempMax: 29,
-      tempMin: 21,
+      temperature: 24,
+      feelsLike: 25,
+      tempMax: 27,
+      tempMin: 18,
       weatherCode: 1,
       conditionLabel: wmo.label,
-      summaryLine: wmo.summary(26, 29, 21, isDay),
+      summaryLine: wmo.summary(24, 27, 18, isDay),
       isDay,
       cloudCover: 0.28,
       precipitation: 0,
       storminess: 0,
       snowAmount: 0,
-      windSpeed: 11,
-      humidity: 62,
+      windSpeed: 10,
+      humidity: 58,
       sunElevation,
       sunAzimuth,
       localTimeStr,
       hourly: [
-        { time: 'Now', temp: 26, humidity: 62, code: 1 },
-        { time: '18:00', temp: 28, humidity: 58, code: 1 },
-        { time: '19:00', temp: 27, humidity: 64, code: 2 },
-        { time: '20:00', temp: 25, humidity: 68, code: 1 },
-        { time: '21:00', temp: 23, humidity: 72, code: 0 },
-        { time: '22:00', temp: 22, humidity: 75, code: 0 }
+        { time: 'Now', temp: 24, humidity: 58, code: 1 },
+        { time: '18:00', temp: 26, humidity: 54, code: 1 },
+        { time: '19:00', temp: 25, humidity: 60, code: 2 },
+        { time: '20:00', temp: 23, humidity: 65, code: 1 },
+        { time: '21:00', temp: 21, humidity: 70, code: 0 },
+        { time: '22:00', temp: 20, humidity: 73, code: 0 }
       ]
     };
   }

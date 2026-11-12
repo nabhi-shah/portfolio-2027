@@ -4,17 +4,46 @@
 <div id="webgl-stage" class="webgl-stage" aria-hidden="true"></div>
 
 <script>
+  import type { ShaderStage, ShaderWeatherTarget } from '@/webgl/ShaderStage';
+  import type { WeatherState } from '@/config/weather';
+
+  declare global {
+    interface Window {
+      __shaderStage?: ShaderStage;
+      __pendingWeatherState?: WeatherState;
+      __pendingWeatherPreset?: ShaderWeatherTarget;
+    }
+  }
+
   const mountShader = async () => {
     const container = document.getElementById('webgl-stage');
     if (!container) return;
 
     const { ShaderStage } = await import('@/webgl/ShaderStage');
-    new ShaderStage(container);
+    const stage = new ShaderStage(container);
+    window.__shaderStage = stage;
+
+    if (window.__pendingWeatherState) {
+      stage.setWeatherState(window.__pendingWeatherState);
+    } else if (window.__pendingWeatherPreset) {
+      stage.setPreset(window.__pendingWeatherPreset);
+    }
+
     container.classList.add('is-ready');
   };
 
+  window.addEventListener('weather:state', ((e: CustomEvent<WeatherState>) => {
+    window.__pendingWeatherState = e.detail;
+    window.__shaderStage?.setWeatherState(e.detail);
+  }) as EventListener);
+
+  window.addEventListener('weather:preset', ((e: CustomEvent<ShaderWeatherTarget>) => {
+    window.__pendingWeatherPreset = e.detail;
+    window.__shaderStage?.setPreset(e.detail);
+  }) as EventListener);
+
   if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(() => mountShader(), { timeout: 200 });
+    window.requestIdleCallback(() => mountShader(), { timeout: 150 });
   } else {
     requestAnimationFrame(() => setTimeout(mountShader, 0));
   }
@@ -27,7 +56,7 @@
     z-index: 0;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .webgl-stage.is-ready {

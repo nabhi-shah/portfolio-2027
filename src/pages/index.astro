@@ -3,78 +3,1043 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import ShaderCanvas from '@/components/ShaderCanvas.astro';
 ---
 
-<BaseLayout>
+<BaseLayout title="Nabhi Shah — Atmospheric Portfolio 2027">
   <ShaderCanvas />
 
-  <main class="shell">
+  <main class="weather-shell">
+    <!-- Top Navigation & Sky Switcher -->
     <header class="topbar">
-      <span class="brand">NABHI SHAH</span>
-      <span class="status">2027 EDITION // WEBGL READY</span>
+      <div class="brand-group">
+        <span class="brand-name">NABHI SHAH</span>
+        <span class="brand-tag">PORTFOLIO ’27</span>
+      </div>
+
+      <div class="controls-bar">
+        <div class="sky-tabs" role="tablist" aria-label="Active Location Sky">
+          <button
+            type="button"
+            class="sky-tab is-active"
+            data-sky-mode="host"
+            role="tab"
+            aria-selected="true"
+          >
+            <span class="dot live-dot"></span>
+            <span>Nabhi’s Sky</span>
+            <span class="tab-meta" id="tab-host-meta">--°</span>
+          </button>
+          <button
+            type="button"
+            class="sky-tab"
+            data-sky-mode="visitor"
+            role="tab"
+            aria-selected="false"
+          >
+            <span class="dot visitor-dot"></span>
+            <span>Your Sky</span>
+            <span class="tab-meta" id="tab-visitor-meta">--°</span>
+          </button>
+        </div>
+
+        <div class="shader-presets" aria-label="Shader Mood Preview">
+          <button type="button" class="preset-chip" data-preset="clear" title="Preview Reference Sunny Sky">
+            ☀ Clear 29°
+          </button>
+          <button type="button" class="preset-chip" data-preset="golden" title="Preview Golden Hour">
+            🌅 Sunset
+          </button>
+          <button type="button" class="preset-chip" data-preset="storm" title="Preview Rain & Lightning">
+            ⛈ Storm
+          </button>
+          <button type="button" class="preset-chip" data-preset="night" title="Preview Starry Night">
+            🌙 Night
+          </button>
+        </div>
+      </div>
     </header>
 
-    <section class="hero">
-      <p class="eyebrow">CREATIVE TECHNOLOGY &amp; INTERACTIVE SHADERS</p>
-      <h1 class="headline">Portfolio 2027</h1>
-      <p class="subcopy">
-        Zero-JS static HTML shell with deferred OGL / Three.js &amp; GLSL shader pipeline.
-      </p>
-    </section>
+    <!-- Main One UI Inspired Content Grid -->
+    <div class="content-grid">
+      <!-- Left: One UI Hero Weather Readout -->
+      <section class="hero-weather" aria-live="polite">
+        <div class="location-row">
+          <svg class="pin-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z" />
+          </svg>
+          <h1 class="city-name" id="active-city">Loading Sky…</h1>
+          <span class="role-badge" id="active-owner-badge">Nabhi’s Location</span>
+        </div>
+
+        <div class="time-subtitle">
+          <span id="active-local-time">--:--</span>
+          <span class="sep">·</span>
+          <span id="active-tz">Local Time</span>
+        </div>
+
+        <div class="temp-hero" id="active-temp">29°</div>
+        <div class="condition-hero" id="active-condition">Clear</div>
+
+        <div class="high-low-row">
+          <span class="hl-item">↑ <strong id="active-max">34°</strong></span>
+          <span class="hl-item">↓ <strong id="active-min">27°</strong></span>
+        </div>
+        <div class="feels-like">
+          Feels like <span id="active-feels">32°</span>
+        </div>
+      </section>
+
+      <!-- Right / Bottom: One UI Frosted Glass Cards -->
+      <section class="cards-stack">
+        <!-- Card 1: One UI Hourly Forecast & Curve Card -->
+        <article class="glass-card hourly-card">
+          <p class="card-headline" id="active-summary">
+            Sunlit sky with volumetric clouds and crepuscular rays.
+          </p>
+          <div class="card-divider"></div>
+
+          <div class="hourly-columns" id="hourly-columns">
+            <!-- Populated dynamically -->
+          </div>
+
+          <!-- Smooth SVG Temperature Curve (One UI Amber Line) -->
+          <div class="curve-wrap">
+            <svg
+              id="temp-curve-svg"
+              viewBox="0 0 600 68"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <defs>
+                <linearGradient id="curveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#ffb347" />
+                  <stop offset="50%" stop-color="#ff8c24" />
+                  <stop offset="100%" stop-color="#ffd269" />
+                </linearGradient>
+                <filter id="curveGlow" x="-20%" y="-40%" width="140%" height="180%">
+                  <feGaussianBlur stdDeviation="3.5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <path
+                id="temp-curve-path"
+                d="M 50 34 C 150 18, 250 22, 350 38 C 450 48, 500 46, 550 46"
+                fill="none"
+                stroke="url(#curveGrad)"
+                stroke-width="3.5"
+                stroke-linecap="round"
+                filter="url(#curveGlow)"
+              />
+              <g id="temp-curve-dots"></g>
+            </svg>
+          </div>
+
+          <div class="humidity-row" id="humidity-row">
+            <!-- Populated dynamically -->
+          </div>
+        </article>
+
+        <!-- Card 2: Dual Location Live Comparison (Nabhi vs Visitor) -->
+        <div class="dual-cards">
+          <article
+            class="glass-card location-compare-card is-selected"
+            id="card-host"
+            data-select-sky="host"
+            tabindex="0"
+            role="button"
+            aria-label="Switch shader sky to Nabhi's location"
+          >
+            <div class="compare-top">
+              <div>
+                <span class="compare-eyebrow">MY LOCATION · LIVE</span>
+                <h2 class="compare-city" id="host-city">New York</h2>
+              </div>
+              <span class="compare-clock" id="host-time">--:--</span>
+            </div>
+            <div class="compare-bottom">
+              <div class="compare-condition">
+                <span id="host-condition">Syncing…</span>
+                <span class="compare-hl" id="host-hl">↑ --° · ↓ --°</span>
+              </div>
+              <div class="compare-temp" id="host-temp">--°</div>
+            </div>
+          </article>
+
+          <article
+            class="glass-card location-compare-card"
+            id="card-visitor"
+            data-select-sky="visitor"
+            tabindex="0"
+            role="button"
+            aria-label="Switch shader sky to your current location"
+          >
+            <div class="compare-top">
+              <div>
+                <div class="eyebrow-with-action">
+                  <span class="compare-eyebrow">YOUR LOCATION · LIVE</span>
+                  <button
+                    type="button"
+                    class="gps-btn"
+                    id="precise-gps-btn"
+                    title="Use precise browser GPS location"
+                  >
+                    ◎ Precise GPS
+                  </button>
+                </div>
+                <h2 class="compare-city" id="visitor-city">Detecting…</h2>
+              </div>
+              <span class="compare-clock" id="visitor-time">--:--</span>
+            </div>
+            <div class="compare-bottom">
+              <div class="compare-condition">
+                <span id="visitor-condition">Syncing…</span>
+                <span class="compare-hl" id="visitor-hl">↑ --° · ↓ --°</span>
+              </div>
+              <div class="compare-temp" id="visitor-temp">--°</div>
+            </div>
+          </article>
+        </div>
+
+        <!-- Card 3: Atmospheric Metrics Strip (Yesterday/Today One UI style) -->
+        <article class="glass-card metrics-strip">
+          <div class="metric-item">
+            <span class="metric-label">Wind Flow</span>
+            <span class="metric-val" id="active-wind">11 km/h</span>
+          </div>
+          <div class="metric-sep"></div>
+          <div class="metric-item">
+            <span class="metric-label">Humidity</span>
+            <span class="metric-val" id="active-humidity">62%</span>
+          </div>
+          <div class="metric-sep"></div>
+          <div class="metric-item">
+            <span class="metric-label">Cloud Volume</span>
+            <span class="metric-val" id="active-clouds">22%</span>
+          </div>
+          <div class="metric-sep"></div>
+          <div class="metric-item">
+            <span class="metric-label">Shader Pipeline</span>
+            <span class="metric-val">Volumetric + HDR Bloom</span>
+          </div>
+        </article>
+      </section>
+    </div>
   </main>
 </BaseLayout>
 
+<script>
+  import {
+    HOST_LOCATION,
+    detectVisitorLocation,
+    fetchWeatherForLocation,
+    formatTimeInZone
+  } from '@/services/weatherService';
+  import type { WeatherState } from '@/config/weather';
+  import type { ShaderWeatherTarget } from '@/webgl/ShaderStage';
+
+  let hostWeather: WeatherState | null = null;
+  let visitorWeather: WeatherState | null = null;
+  let activeMode: 'host' | 'visitor' = 'host';
+
+  const getWeatherIconSvg = (code: number, isDay = true): string => {
+    if (code === 0 || code === 1) {
+      return isDay
+        ? `<svg viewBox="0 0 28 28" class="wx-icon"><circle cx="14" cy="14" r="8" fill="#FFB830"/></svg>`
+        : `<svg viewBox="0 0 28 28" class="wx-icon"><path d="M17.5 7.5a7.5 7.5 0 1 0 3 13.8A6.5 6.5 0 0 1 17.5 7.5z" fill="#BFD7FF"/></svg>`;
+    }
+    if (code === 2 || code === 3 || code === 45 || code === 48) {
+      return `<svg viewBox="0 0 28 28" class="wx-icon">
+        <circle cx="11" cy="12" r="5" fill="#FFB830"/>
+        <path d="M10 21h10a4.5 4.5 0 0 0 .6-8.96A6 6 0 0 0 9 11a4.5 4.5 0 0 0 1 10z" fill="#EEF4FA"/>
+      </svg>`;
+    }
+    if (code >= 95) {
+      return `<svg viewBox="0 0 28 28" class="wx-icon">
+        <path d="M8.5 19h11a4 4 0 0 0 .5-7.96A5.5 5.5 0 0 0 8 10a4 4 0 0 0 .5 9z" fill="#DCE6F2"/>
+        <path d="M14.5 16l-3 5h2.5l-1 4 4.5-6h-2.5l1.5-3z" fill="#FFC83B"/>
+      </svg>`;
+    }
+    return `<svg viewBox="0 0 28 28" class="wx-icon">
+      <path d="M8.5 18h11a4 4 0 0 0 .5-7.96A5.5 5.5 0 0 0 8 9a4 4 0 0 0 .5 9z" fill="#E4EEF8"/>
+      <line x1="11" y1="20" x2="9.5" y2="24" stroke="#6EC3FF" stroke-width="2" stroke-linecap="round"/>
+      <line x1="15.5" y1="20" x2="14" y2="24" stroke="#6EC3FF" stroke-width="2" stroke-linecap="round"/>
+      <line x1="20" y1="20" x2="18.5" y2="24" stroke="#6EC3FF" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
+  };
+
+  const renderCurve = (temps: number[]) => {
+    const pathEl = document.getElementById('temp-curve-path');
+    const dotsEl = document.getElementById('temp-curve-dots');
+    if (!pathEl || !dotsEl || temps.length === 0) return;
+
+    const min = Math.min(...temps);
+    const max = Math.max(...temps);
+    const span = Math.max(2, max - min);
+
+    const points = temps.map((t, i) => {
+      const x = 50 + i * (500 / Math.max(1, temps.length - 1));
+      const norm = (t - min) / span; // 0..1
+      const y = 52 - norm * 34; // y in [18..52]
+      return { x, y };
+    });
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i];
+      const p1 = points[i + 1];
+      const cx = (p0.x + p1.x) / 2;
+      d += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
+    }
+    pathEl.setAttribute('d', d);
+
+    dotsEl.innerHTML = points
+      .map(
+        (pt, idx) =>
+          `<circle cx="${pt.x}" cy="${pt.y}" r="${idx === 0 ? 4.5 : 3}" fill="#fff" stroke="#ff9d3b" stroke-width="2"/>`
+      )
+      .join('');
+  };
+
+  const renderActiveHero = (state: WeatherState) => {
+    const setText = (id: string, val: string) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+
+    setText('active-city', state.location.city);
+    setText('active-owner-badge', state.location.label);
+    setText('active-local-time', state.localTimeStr);
+    setText('active-tz', state.location.timezone.replace(/_/g, ' '));
+    setText('active-temp', `${state.temperature}°`);
+    setText('active-condition', state.conditionLabel);
+    setText('active-max', `${state.tempMax}°`);
+    setText('active-min', `${state.tempMin}°`);
+    setText('active-feels', `${state.feelsLike}°`);
+    setText('active-summary', state.summaryLine);
+    setText('active-wind', `${state.windSpeed} km/h`);
+    setText('active-humidity', `${state.humidity}%`);
+    setText('active-clouds', `${Math.round(state.cloudCover * 100)}%`);
+
+    // Render hourly columns
+    const hourlyEl = document.getElementById('hourly-columns');
+    const humidityEl = document.getElementById('humidity-row');
+    if (hourlyEl && humidityEl) {
+      hourlyEl.innerHTML = state.hourly
+        .map(
+          (h) => `
+          <div class="hour-col">
+            <span class="hour-time">${h.time}</span>
+            <div class="hour-icon">${getWeatherIconSvg(h.code, state.isDay)}</div>
+            <span class="hour-temp">${h.temp}°</span>
+          </div>
+        `
+        )
+        .join('');
+
+      humidityEl.innerHTML = state.hourly
+        .map(
+          (h) => `
+          <div class="hum-col">
+            <span class="drop">💧</span>
+            <span>${h.humidity}%</span>
+          </div>
+        `
+        )
+        .join('');
+
+      renderCurve(state.hourly.map((h) => h.temp));
+    }
+
+    // Dispatch state to WebGL shader stage
+    window.dispatchEvent(new CustomEvent('weather:state', { detail: state }));
+  };
+
+  const renderComparisonCard = (prefix: 'host' | 'visitor', state: WeatherState) => {
+    const setText = (id: string, val: string) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    setText(`${prefix}-city`, state.location.city);
+    setText(`${prefix}-time`, state.localTimeStr);
+    setText(`${prefix}-condition`, state.conditionLabel);
+    setText(`${prefix}-hl`, `↑ ${state.tempMax}° · ↓ ${state.tempMin}°`);
+    setText(`${prefix}-temp`, `${state.temperature}°`);
+    setText(`tab-${prefix}-meta`, `${state.location.city} ${state.temperature}°`);
+  };
+
+  const setActiveSkyMode = (mode: 'host' | 'visitor') => {
+    activeMode = mode;
+
+    // Clear any manual preset highlight
+    document.querySelectorAll('.preset-chip').forEach((btn) => btn.classList.remove('is-active'));
+
+    document.querySelectorAll('[data-sky-mode]').forEach((btn) => {
+      const isMatch = btn.getAttribute('data-sky-mode') === mode;
+      btn.classList.toggle('is-active', isMatch);
+      btn.setAttribute('aria-selected', String(isMatch));
+    });
+
+    document.getElementById('card-host')?.classList.toggle('is-selected', mode === 'host');
+    document.getElementById('card-visitor')?.classList.toggle('is-selected', mode === 'visitor');
+
+    const targetState = mode === 'host' ? hostWeather : visitorWeather;
+    if (targetState) {
+      renderActiveHero(targetState);
+    }
+  };
+
+  // Wire up tabs & comparison cards
+  document.querySelectorAll('[data-sky-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = btn.getAttribute('data-sky-mode') as 'host' | 'visitor';
+      setActiveSkyMode(mode);
+    });
+  });
+
+  document.querySelectorAll('[data-select-sky]').forEach((card) => {
+    card.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('#precise-gps-btn')) return;
+      const mode = card.getAttribute('data-select-sky') as 'host' | 'visitor';
+      setActiveSkyMode(mode);
+    });
+  });
+
+  // Wire up instant shader mood preview pills
+  const PRESETS: Record<string, { target: ShaderWeatherTarget; temp: string; label: string }> = {
+    clear: {
+      target: {
+        sunElevation: 0.82,
+        cloudCover: 0.22,
+        rain: 0,
+        storm: 0,
+        snow: 0,
+        windSpeed: 1.0
+      },
+      temp: '29°',
+      label: 'Clear · Sunlit Volumetric Sky'
+    },
+    golden: {
+      target: {
+        sunElevation: 0.12,
+        cloudCover: 0.36,
+        rain: 0,
+        storm: 0,
+        snow: 0,
+        windSpeed: 0.85
+      },
+      temp: '24°',
+      label: 'Golden Hour · Crepuscular Rays'
+    },
+    storm: {
+      target: {
+        sunElevation: 0.25,
+        cloudCover: 0.94,
+        rain: 0.9,
+        storm: 0.92,
+        snow: 0,
+        windSpeed: 2.1
+      },
+      temp: '18°',
+      label: 'Thunderstorm · Sheet Lightning'
+    },
+    night: {
+      target: {
+        sunElevation: -0.65,
+        cloudCover: 0.2,
+        rain: 0,
+        storm: 0,
+        snow: 0,
+        windSpeed: 0.65
+      },
+      temp: '15°',
+      label: 'Starry Night · Lunar Glow'
+    }
+  };
+
+  document.querySelectorAll('[data-preset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-preset') || 'clear';
+      const p = PRESETS[key];
+      if (!p) return;
+
+      document.querySelectorAll('.preset-chip').forEach((b) => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+
+      window.dispatchEvent(new CustomEvent('weather:preset', { detail: p.target }));
+    });
+  });
+
+  // Optional precise browser geolocation button
+  document.getElementById('precise-gps-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!('geolocation' in navigator)) return;
+    const btn = e.currentTarget as HTMLButtonElement;
+    btn.textContent = 'Locating…';
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const loc = {
+          id: 'visitor' as const,
+          label: 'Your Precise Location',
+          city: visitorWeather?.location.city || 'Current Coordinates',
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          timezone: tz
+        };
+        // Reverse geocode city name via free BigDataCloud client endpoint
+        try {
+          const rev = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${loc.latitude}&longitude=${loc.longitude}&localityLanguage=en`
+          );
+          if (rev.ok) {
+            const revData = await rev.json();
+            loc.city = revData.city || revData.locality || loc.city;
+          }
+        } catch {
+          // keep fallback city name
+        }
+
+        visitorWeather = await fetchWeatherForLocation(loc);
+        renderComparisonCard('visitor', visitorWeather);
+        setActiveSkyMode('visitor');
+        btn.textContent = '✓ GPS Synced';
+      },
+      () => {
+        btn.textContent = 'GPS Blocked';
+      },
+      { timeout: 6000 }
+    );
+  });
+
+  // Initialize both Host & Visitor weather feeds in parallel
+  const initFeeds = async () => {
+    const hostPromise = fetchWeatherForLocation(HOST_LOCATION).then((state) => {
+      hostWeather = state;
+      renderComparisonCard('host', state);
+      if (activeMode === 'host') renderActiveHero(state);
+    });
+
+    const visitorPromise = detectVisitorLocation()
+      .then((loc) => fetchWeatherForLocation(loc))
+      .then((state) => {
+        visitorWeather = state;
+        renderComparisonCard('visitor', state);
+        if (activeMode === 'visitor') renderActiveHero(state);
+      });
+
+    await Promise.allSettled([hostPromise, visitorPromise]);
+  };
+
+  initFeeds();
+
+  // Keep both local clocks ticking every 15 seconds
+  setInterval(() => {
+    if (hostWeather) {
+      hostWeather.localTimeStr = formatTimeInZone(hostWeather.location.timezone);
+      const el = document.getElementById('host-time');
+      if (el) el.textContent = hostWeather.localTimeStr;
+      if (activeMode === 'host') {
+        const activeEl = document.getElementById('active-local-time');
+        if (activeEl) activeEl.textContent = hostWeather.localTimeStr;
+      }
+    }
+    if (visitorWeather) {
+      visitorWeather.localTimeStr = formatTimeInZone(visitorWeather.location.timezone);
+      const el = document.getElementById('visitor-time');
+      if (el) el.textContent = visitorWeather.localTimeStr;
+      if (activeMode === 'visitor') {
+        const activeEl = document.getElementById('active-local-time');
+        if (activeEl) activeEl.textContent = visitorWeather.localTimeStr;
+      }
+    }
+  }, 15000);
+</script>
+
 <style>
-  .shell {
+  .weather-shell {
     position: relative;
     z-index: 1;
     min-height: 100svh;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: clamp(1.5rem, 4vw, 3.5rem);
+    padding: clamp(1.25rem, 3vw, 2.5rem) clamp(1.25rem, 4vw, 3.5rem);
+    color: #ffffff;
+    text-shadow: 0 2px 16px rgba(8, 22, 48, 0.22);
   }
 
+  /* Top Bar */
   .topbar {
     display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.75rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 1.25rem;
   }
 
-  .brand {
-    color: var(--fg);
+  .brand-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .brand-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+  }
+
+  .brand-tag {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+  }
+
+  .controls-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .sky-tabs {
+    display: inline-flex;
+    padding: 0.25rem;
+    border-radius: 999px;
+    background: rgba(15, 32, 58, 0.34);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+  }
+
+  .sky-tab {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.78);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.45rem 0.95rem;
+    border-radius: 999px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    transition: all 0.25s ease;
+  }
+
+  .sky-tab.is-active {
+    background: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  }
+
+  .tab-meta {
+    font-size: 0.72rem;
+    opacity: 0.78;
+    padding-left: 0.2rem;
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .live-dot {
+    background: #69f0ae;
+    box-shadow: 0 0 8px #69f0ae;
+  }
+
+  .visitor-dot {
+    background: #ffd54f;
+    box-shadow: 0 0 8px #ffd54f;
+  }
+
+  .shader-presets {
+    display: inline-flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .preset-chip {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(15, 32, 58, 0.28);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    color: rgba(255, 255, 255, 0.88);
+    font: inherit;
+    font-size: 0.74rem;
+    padding: 0.42rem 0.75rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .preset-chip:hover,
+  .preset-chip.is-active {
+    background: rgba(255, 255, 255, 0.28);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #fff;
+  }
+
+  /* Main Layout Grid */
+  .content-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    align-items: end;
+    margin-top: auto;
+    padding-top: 2.5rem;
+  }
+
+  @media (min-width: 980px) {
+    .content-grid {
+      grid-template-columns: minmax(280px, 0.9fr) minmax(460px, 1.1fr);
+      gap: 3rem;
+    }
+  }
+
+  /* One UI Hero Readout */
+  .hero-weather {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding-bottom: 0.5rem;
+  }
+
+  .location-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .pin-icon {
+    width: 1.4rem;
+    height: 1.4rem;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
+  }
+
+  .city-name {
+    font-size: clamp(1.75rem, 3.2vw, 2.45rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .role-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.22rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+  }
+
+  .time-subtitle {
+    margin-top: 0.35rem;
+    font-size: 0.88rem;
+    color: rgba(255, 255, 255, 0.84);
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .temp-hero {
+    font-size: clamp(5.2rem, 11vw, 8.2rem);
+    font-weight: 200;
+    line-height: 0.95;
+    letter-spacing: -0.05em;
+    margin-top: 0.6rem;
+    background: linear-gradient(180deg, #ffffff 15%, rgba(235, 248, 255, 0.76) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 8px 28px rgba(14, 42, 86, 0.22));
+  }
+
+  .condition-hero {
+    font-size: clamp(1.45rem, 2.4vw, 2rem);
+    font-weight: 500;
+    margin-top: 0.25rem;
+    color: rgba(255, 255, 255, 0.96);
+  }
+
+  .high-low-row {
+    display: flex;
+    gap: 0.9rem;
+    margin-top: 0.9rem;
+    font-size: 1.02rem;
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .feels-like {
+    margin-top: 0.25rem;
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.84);
+  }
+
+  /* One UI Frosted Glass Cards */
+  .cards-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.95rem;
+  }
+
+  .glass-card {
+    background: linear-gradient(
+      145deg,
+      rgba(38, 66, 56, 0.46) 0%,
+      rgba(22, 42, 54, 0.54) 100%
+    );
+    backdrop-filter: blur(26px) saturate(165%);
+    -webkit-backdrop-filter: blur(26px) saturate(165%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 26px;
+    padding: 1.25rem 1.4rem;
+    box-shadow:
+      0 18px 42px rgba(6, 16, 30, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  }
+
+  .card-headline {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.96);
+  }
+
+  .card-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.16);
+    margin: 0.85rem 0 1rem;
+  }
+
+  :global(.hourly-columns) {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    text-align: center;
+    gap: 0.25rem;
+  }
+
+  :global(.hour-col) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  :global(.hour-time) {
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  :global(.wx-icon) {
+    width: 28px;
+    height: 28px;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.22));
+  }
+
+  :global(.hour-temp) {
+    font-size: 0.92rem;
     font-weight: 600;
   }
 
-  .hero {
-    margin: auto 0;
-    max-width: 48rem;
+  .curve-wrap {
+    width: 100%;
+    height: 58px;
+    margin: 0.15rem 0;
   }
 
-  .eyebrow {
-    font-size: 0.75rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 1rem;
+  #temp-curve-svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
   }
 
-  .headline {
-    font-size: clamp(3rem, 9vw, 7rem);
-    font-weight: 500;
-    letter-spacing: -0.04em;
-    line-height: 0.96;
-    margin-bottom: 1.5rem;
+  :global(.humidity-row) {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    text-align: center;
+    font-size: 0.74rem;
+    color: rgba(255, 255, 255, 0.78);
+    margin-top: 0.15rem;
   }
 
-  .subcopy {
-    font-size: clamp(1rem, 1.5vw, 1.25rem);
-    line-height: 1.6;
-    color: var(--muted);
-    max-width: 36rem;
+  :global(.hum-col) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+  }
+
+  :global(.drop) {
+    font-size: 0.65rem;
+    opacity: 0.85;
+  }
+
+  /* Dual Location Cards */
+  .dual-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.9rem;
+  }
+
+  @media (max-width: 620px) {
+    .dual-cards {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .location-compare-card {
+    cursor: pointer;
+    transition:
+      transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 0.25s ease,
+      background 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.95rem;
+  }
+
+  .location-compare-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.42);
+  }
+
+  .location-compare-card.is-selected {
+    border-color: rgba(255, 255, 255, 0.65);
+    background: linear-gradient(
+      145deg,
+      rgba(52, 92, 76, 0.56) 0%,
+      rgba(28, 56, 74, 0.64) 100%
+    );
+  }
+
+  .compare-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .eyebrow-with-action {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  .compare-eyebrow {
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.72);
+    display: block;
+  }
+
+  .gps-btn {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    font-size: 0.64rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .gps-btn:hover {
+    background: rgba(255, 255, 255, 0.28);
+  }
+
+  .compare-city {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-top: 0.2rem;
+  }
+
+  .compare-clock {
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    padding: 0.22rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.22);
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .compare-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .compare-condition {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    font-size: 0.88rem;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .compare-hl {
+    font-size: 0.76rem;
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  .compare-temp {
+    font-size: 2.3rem;
+    font-weight: 300;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+
+  /* Metrics Strip */
+  .metrics-strip {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.95rem 1.4rem;
+    gap: 0.75rem;
+  }
+
+  .metric-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .metric-label {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.68);
+  }
+
+  .metric-val {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .metric-sep {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  @media (max-width: 620px) {
+    .metric-sep {
+      display: none;
+    }
   }
 </style>

@@ -5,6 +5,7 @@ uniform sampler2D tBloomWide;
 uniform sampler2D tBloomTight;
 uniform float uBloomStrength;
 uniform vec2 uResolution;
+uniform vec2 uSunUv;
 uniform float uTime;
 
 varying vec2 vUv;
@@ -27,21 +28,32 @@ float hash12(vec2 p) {
 
 void main() {
   vec3 scene = texture2D(tScene, vUv).rgb;
+  vec3 hdr = scene;
 
-  // Subtle chromatic dispersion on the wide bloom halo for optical lens realism
-  vec2 caOffset = (vUv - vec2(0.15, 0.82)) * 0.0035;
-  vec3 bloomWide;
-  bloomWide.r = texture2D(tBloomWide, vUv + caOffset).r;
-  bloomWide.g = texture2D(tBloomWide, vUv).g;
-  bloomWide.b = texture2D(tBloomWide, vUv - caOffset).b;
+  if (uBloomStrength > 0.005) {
+    // Subtle chromatic dispersion on the wide bloom halo radiating from the sun
+    vec2 caOffset = (vUv - uSunUv) * 0.0035;
+    vec3 bloomWide = vec3(
+      texture2D(tBloomWide, vUv + caOffset).r,
+      texture2D(tBloomWide, vUv).g,
+      texture2D(tBloomWide, vUv - caOffset).b
+    );
 
-  vec3 bloomTight = texture2D(tBloomTight, vUv).rgb;
-  vec3 totalBloom = bloomTight * 0.55 + bloomWide * 0.85;
+    vec3 bloomTight = texture2D(tBloomTight, vUv).rgb;
+    vec3 totalBloom = bloomTight * 0.58 + bloomWide * 0.90;
+    hdr += totalBloom * uBloomStrength;
+  }
 
-  vec3 hdr = scene + totalBloom * uBloomStrength;
+  // Scope HDR core lift strictly around the solar disc so bright clouds never neon-clip
+  float aspect = uResolution.x / max(1.0, uResolution.y);
+  float sunDist = length((vUv - uSunUv) * vec2(aspect, 1.0));
+  float sunScope = smoothstep(0.14, 0.025, sunDist);
+  float solarPeak = smoothstep(0.88, 0.99, dot(scene, vec3(0.52, 0.36, 0.12))) * sunScope;
+  vec3 warmPeakTint = mix(vec3(1.0), vec3(1.06, 0.94, 0.78), smoothstep(0.05, 0.35, scene.r - scene.b + 0.1));
+  hdr += scene * warmPeakTint * (solarPeak * 1.45);
 
   // Tone-map & subtle saturation lift
-  vec3 ldr = acesToneMap(hdr * 0.94);
+  vec3 ldr = acesToneMap(hdr * 0.96);
   float luma = dot(ldr, vec3(0.2126, 0.7152, 0.0722));
   ldr = mix(vec3(luma), ldr, 1.12);
 

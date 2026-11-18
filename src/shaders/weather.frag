@@ -22,8 +22,13 @@ uniform float uStorm;          // 0.0 to 1.0 (darkening + lightning)
 uniform float uWindSpeed;      // 0.0 to 3.0
 uniform float uRainbow;        // 0.0 to 1.0 (optical rainbow arc)
 uniform float uAurora;         // 0.0 to 1.0 (nighttime aurora borealis)
+uniform float uLoaderClouds;   // 0.0 (normal) to 1.0 (full-screen loader cloud canopy)
 
 varying vec2 vUv;
+
+// Effective cloud amount used for cloud geometry. Scaled down so every weather state shows
+// noticeably fewer clouds than the raw cover value (sky tint / stars still use uCloudCover).
+#define CLOUD_AMOUNT (uCloudCover * 0.6)
 
 // ---------------------------------------------------------
 // Fast, Cross-Platform Hash & 3D Value Noise
@@ -106,83 +111,217 @@ float hgPhase(float cosTheta, float g) {
 // Screen-Space 2D Cloud Coverage (Evaluated ONCE per pixel!)
 // ---------------------------------------------------------
 float computeScreenCoverage(vec2 uv, float aspect) {
-  if (uCloudCover <= 0.005 || uCloudDensity <= 0.005) return 0.0;
+  if ((uCloudCover <= 0.005 || uCloudDensity <= 0.005) && uLoaderClouds <= 0.005) return 0.0;
 
-  // Cloud centers matching One UI Paris upper-right cumulus bank
-  vec2 c1 = vec2(0.80, 0.82);
-  vec2 c2 = vec2(0.52, 0.87);
-  vec2 c3 = vec2(0.88, 0.56);
-  vec2 c4 = vec2(0.24, 0.64);
+  float normalCov = 0.0;
+  if (CLOUD_AMOUNT > 0.005 && uCloudDensity > 0.005) {
+    float heavyMix = smoothstep(0.36, 0.58, CLOUD_AMOUNT);
+    float drift = uTime * 0.012 * uWindSpeed;
+    // Organic undulating base prevents a straight horizontal shelf while keeping clouds in top sky
+    float edgeWave =
+      (noise3D(vec3(uv.x * 3.6 - drift * 0.4, 1.7, 3.3)) - 0.5) * 0.11 +
+      (noise3D(vec3(uv.x * 8.4 + drift * 0.2, 4.1, 7.2)) - 0.5) * 0.04;
+    float lowerEdge = mix(0.68, 0.56, heavyMix) + edgeWave * (1.0 - 0.35 * heavyMix);
+    float skyBand = smoothstep(lowerEdge, lowerEdge + 0.17, uv.y);
 
-  float d1 = smoothstep(0.42, 0.04, length((uv - c1) * vec2(aspect * 0.78, 1.15)));
-  float d2 = smoothstep(0.32, 0.04, length((uv - c2) * vec2(aspect * 0.85, 1.35))) * 0.82;
-  float d3 = smoothstep(0.30, 0.04, length((uv - c3) * vec2(aspect * 0.90, 1.30))) * 0.75;
-  float d4 = smoothstep(0.28, 0.04, length((uv - c4) * vec2(aspect * 0.95, 1.45))) * 0.65;
+    if (skyBand > 0.005) {
+      vec2 sp = (uv - vec2(0.5, 0.88)) * vec2(aspect * 1.65, 2.60) + vec2(3.7 - drift, -0.6);
+      // Rotated domain warp + 4-octave breakup creates asymmetrical, irregular scattered cumulus shapes
+      vec3 warpSample = m3 * vec3(sp * 2.2 + vec2(3.1, -1.7), 1.9);
+      vec2 domainWarp = vec2(
+        noise3D(warpSample) - 0.5,
+        noise3D(warpSample + vec3(5.2, 1.3, 2.8)) - 0.5
+      ) * mix(0.46, 0.18, heavyMix);
+      vec3 wp = m3 * vec3((sp + domainWarp) * 1.85, 2.4);
+      float clusterField =
+        0.50 * noise3D(wp) +
+        0.28 * noise3D(m3 * wp * 2.15 + vec3(2.7, -1.9, 1.1)) +
+        0.14 * noise3D(wp * 4.4 + vec3(-3.3, 2.1, 0.7)) +
+        0.08 * noise3D(m3 * wp * 8.6 + vec3(1.4, 4.2, -2.1));
 
-  float clusterMask = max(max(d1, d2), max(d3, d4));
-  float deckMask = smoothstep(0.18, 0.55, uv.y) * smoothstep(0.22, 0.92, uCloudCover);
+      float cutoff = mix(0.66, 0.34, clamp(uCloudCover, 0.0, 1.0));
+      float scattered = smoothstep(cutoff - 0.08, cutoff + 0.11, clusterField) * smoothstep(0.0, 0.20, uCloudCover);
+      float deckMask = smoothstep(0.54, 0.72, uv.y) * smoothstep(0.76, 0.92, uCloudCover);
+      normalCov = clamp(max(scattered, deckMask) * skyBand, 0.0, 1.0);
+    }
+  }
 
-  return clamp(max(clusterMask * smoothstep(0.0, 0.18, uCloudCover), deckMask), 0.0, 1.0);
+  float loaderOpen = 0.0;
+  if (uLoaderClouds > 0.005) {
+    vec2 lp = (uv - 0.5) * vec2(aspect, 1.0);
+    // Multi-scale fractal cumulus breakup so clouds open and vanish in irregular scattered patches across the sky
+    vec3 lq1 = m3 * vec3(lp * 2.1 + vec2(1.4, -0.7), 2.3);
+    vec3 lq2 = m3 * vec3(lp * 3.7 + vec2(-2.1, 1.6), 4.1);
+    float patchNoise = 0.65 * fbmCumulusFast(lq1) + 0.35 * fbmCumulusFast(lq2);
+    float clearT = smoothstep(0.0, 0.94, 1.0 - uLoaderClouds);
+    float field = mix(patchNoise, 1.0, smoothstep(0.86, 1.0, uLoaderClouds));
+    float threshold = mix(0.14, 0.76, clearT);
+    loaderOpen = smoothstep(threshold - 0.13, threshold + 0.13, field);
+  }
+  return clamp(max(normalCov, loaderOpen), 0.0, 1.0);
+}
+
+// Vertical profile of the cloud layer: keeps clouds in the top portion of the sky
+// and lowers slightly for thicker overcast decks.
+float cloudVerticalProfile(float y) {
+  float normalBase = mix(0.22, 0.10, clamp(CLOUD_AMOUNT, 0.0, 1.0));
+  float base = mix(normalBase, -0.95, smoothstep(0.0, 0.08, uLoaderClouds));
+  return smoothstep(base, base + 0.22, y);
 }
 
 // ---------------------------------------------------------
 // 3D Density Field Samples
 // ---------------------------------------------------------
+vec3 getCloudNoiseCoord(vec3 pos) {
+  float wind = uTime * 0.08 * uWindSpeed;
+  vec3 q = pos * vec3(5.2, 6.4, 1.6) + vec3(-wind, 0.0, wind * 0.35);
+  if (uLoaderClouds > 0.005) {
+    vec3 qLoader = m3 * (pos * vec3(2.8, 2.6, 1.8) + vec3(-wind * 0.65, 0.12, wind * 0.25));
+    q = mix(q, qLoader, smoothstep(0.0, 0.35, uLoaderClouds));
+  }
+  return q;
+}
+
 float sampleCloudDensity(vec3 pos, float coverage) {
-  float h = clamp((pos.y + 0.32) / 0.64, 0.0, 1.0);
-  float verticalProfile = smoothstep(0.0, 0.22, h) * smoothstep(1.0, 0.30, h);
+  float verticalProfile = cloudVerticalProfile(pos.y);
   if (verticalProfile <= 0.001) return 0.0;
 
-  float wind = uTime * 0.08 * uWindSpeed;
-  vec3 q = pos * vec3(5.2, 6.4, 4.5) + vec3(-wind, 0.0, wind * 0.35);
-
+  vec3 q = getCloudNoiseCoord(pos);
   float n = fbmCumulusFast(q);
   float baseShape = coverage * verticalProfile;
-  float eroded = smoothstep(0.48 - 0.22 * uCloudCover, 0.72 - 0.12 * uCloudCover, n * (0.45 + 0.75 * baseShape));
+  float lowEdge = mix(0.48 - 0.22 * CLOUD_AMOUNT, 0.31, uLoaderClouds);
+  float highEdge = mix(0.72 - 0.12 * CLOUD_AMOUNT, 0.74, uLoaderClouds);
+  float eroded = smoothstep(lowEdge, highEdge, n * (0.45 + 0.75 * baseShape));
 
-  return eroded * uCloudDensity;
+  float densityScale = mix(uCloudDensity, 0.48, uLoaderClouds);
+  return eroded * densityScale;
 }
 
 float sampleCloudShadowCoarse(vec3 pos, float coverage) {
-  float h = clamp((pos.y + 0.32) / 0.64, 0.0, 1.0);
-  float verticalProfile = smoothstep(0.0, 0.22, h) * smoothstep(1.0, 0.30, h);
+  float verticalProfile = cloudVerticalProfile(pos.y);
   if (verticalProfile <= 0.001) return 0.0;
 
-  float wind = uTime * 0.08 * uWindSpeed;
-  vec3 q = pos * vec3(5.2, 6.4, 4.5) + vec3(-wind, 0.0, wind * 0.35);
-
+  vec3 q = getCloudNoiseCoord(pos);
   float n = fbmCoarseShadow(q);
+  if (uLoaderClouds > 0.005) {
+    n = mix(n, 0.58 * n + 0.42 * fbmCoarseShadow(m3 * q * 1.9 + vec3(0.17, -0.11, 0.03 * uTime)), uLoaderClouds);
+  }
   float baseShape = coverage * verticalProfile;
-  return smoothstep(0.50 - 0.20 * uCloudCover, 0.70 - 0.10 * uCloudCover, n * (0.45 + 0.75 * baseShape)) * uCloudDensity;
+  float lowEdge = mix(0.50 - 0.20 * CLOUD_AMOUNT, 0.31, uLoaderClouds);
+  float highEdge = mix(0.70 - 0.10 * CLOUD_AMOUNT, 0.74, uLoaderClouds);
+  float densityScale = mix(uCloudDensity, 0.48, uLoaderClouds);
+  return smoothstep(lowEdge, highEdge, n * (0.45 + 0.75 * baseShape)) * densityScale;
 }
 
 // ---------------------------------------------------------
 // Starfield & Aurora for Evening / Night Sky
 // ---------------------------------------------------------
-float starField(vec2 uv, float aspect) {
-  vec2 p = uv * vec2(aspect, 1.0) * 75.0;
+vec3 starLayer(
+  vec2 uv,
+  float aspect,
+  float scale,
+  float threshold,
+  float size,
+  float brightness,
+  float sparkleStrength,
+  float seed
+) {
+  vec2 p = uv * vec2(aspect, 1.0) * scale + seed;
   vec2 id = floor(p);
   vec2 gv = fract(p) - 0.5;
-  float rnd = hash12(id);
-  if (rnd < 0.935) return 0.0;
-  vec2 offset = (vec2(fract(rnd * 34.1), fract(rnd * 71.7)) - 0.5) * 0.6;
-  float d = length(gv - offset);
-  float twinkle = 0.6 + 0.4 * sin(uTime * 3.0 + rnd * 60.0);
-  float star = smoothstep(0.075, 0.0, d) * twinkle * smoothstep(0.18, 0.9, uv.y);
-  return star * (rnd - 0.935) * 16.0;
+  float rnd = hash12(id + seed);
+  if (rnd < threshold) return vec3(0.0);
+
+  float mag = (rnd - threshold) / (1.0 - threshold);
+  vec2 offset = (vec2(fract(rnd * 34.17), fract(rnd * 71.73)) - 0.5) * 0.40;
+  vec2 delta = gv - offset;
+  float d = length(delta);
+
+  float twinkle = 0.68 + 0.32 * sin(uTime * (1.8 + fract(rnd * 19.1) * 2.6) + rnd * 62.83);
+  float tintRnd = fract(rnd * 113.7);
+  vec3 starCol = mix(vec3(0.72, 0.85, 1.0), vec3(1.0, 0.96, 0.88), smoothstep(0.15, 0.75, tintRnd));
+  starCol = mix(starCol, vec3(1.0, 0.82, 0.62), smoothstep(0.82, 1.0, tintRnd));
+
+  float edgeMask = smoothstep(0.29, 0.04, d);
+  float core = smoothstep(size, 0.0, d);
+  float halo = exp(-d / max(size * 1.15, 0.01)) * 0.32 * edgeMask;
+  float flare = 0.0;
+  if (sparkleStrength > 0.0) {
+    float ax = exp(-abs(delta.x) * 52.0) * exp(-abs(delta.y) * 16.0);
+    float ay = exp(-abs(delta.y) * 52.0) * exp(-abs(delta.x) * 16.0);
+    flare = (ax + ay) * sparkleStrength * edgeMask;
+  }
+
+  return starCol * (core + halo + flare) * twinkle * brightness * (0.35 + 0.65 * mag);
+}
+
+vec3 renderStars(vec2 uv, float aspect) {
+  float horizonMask = smoothstep(0.08, 0.48, uv.y);
+  if (horizonMask <= 0.001) return vec3(0.0);
+
+  // Subtle diagonal cosmic dust band
+  float bandAxis = (uv.y - 0.24) - (uv.x - 0.5) * 0.45;
+  float milkyBand = exp(-bandAxis * bandAxis * 12.0);
+  float dustNoise = noise3D(vec3(uv * vec2(aspect, 1.0) * 4.2, 1.7));
+  float milkyGlow = milkyBand * smoothstep(0.35, 0.85, dustNoise);
+  vec3 cosmicBand = vec3(0.012, 0.022, 0.052) * milkyGlow;
+
+  vec3 l1 = starLayer(uv, aspect, 96.0, 0.915, 0.105, 0.68, 0.0, 11.3);
+  vec3 l2 = starLayer(uv, aspect, 56.0, 0.938, 0.098, 1.05, 0.0, 37.9);
+  vec3 l3 = starLayer(uv, aspect, 28.0, 0.958, 0.090, 1.55, 0.42, 73.1);
+
+  return (cosmicBand + l1 + l2 + l3) * horizonMask;
+}
+
+// Single aurora curtain: a meandering, folding lower edge with a sharp bright-green base,
+// vertical ray striations, and a long fade upward through teal into violet/magenta.
+vec3 auroraCurtain(vec2 uv, float aspect, float baseY, float height, float seed, float strength) {
+  // Fast vertical envelope bailout before trig/noise evaluation
+  if (uv.y < baseY - 0.29 || uv.y > baseY + height * 1.8 + 0.19) return vec3(0.0);
+
+  float x = (uv.x - 0.5) * aspect;
+  float t = uTime;
+
+  float edge = baseY
+    + 0.090 * sin(x * 1.3 + seed + t * 0.06)
+    + 0.050 * sin(x * 3.1 - seed * 1.7 - t * 0.11)
+    + 0.022 * sin(x * 7.4 + seed * 2.3 + t * 0.23);
+
+  // Ragged lower edge: individual bands end at slightly different heights
+  edge -= 0.024 * noise3D(vec3(x * 10.0 + edge * 8.0, seed, t * 0.18));
+
+  float h = uv.y - edge; // height above the lower edge
+  if (h < -0.10 || h > height * 1.8) return vec3(0.0);
+
+  // Single smooth vertical envelope: wide, seamless fade below the edge + long fade upward
+  float lower = smoothstep(-0.10, 0.06, h);
+  float vertical = lower * exp(-max(h, 0.0) / (height * 0.48));
+
+  // Wider vertical bands / rays following the curtain folds
+  float rx = x * 14.0 + edge * 8.0;
+  float rays = 0.32 + 0.68 * noise3D(vec3(rx, h * 1.6, t * 0.20 + seed));
+  rays *= 0.72 + 0.50 * noise3D(vec3(rx * 1.8, h * 2.4, t * 0.34 + seed * 3.0));
+
+  // Large patches along the curtain slowly brighten and dim
+  float patches = smoothstep(0.20, 0.80, noise3D(vec3(x * 1.1 + seed, seed, t * 0.05)));
+
+  float intensity = vertical * rays * (0.12 + 0.88 * patches) * strength;
+
+  // Altitude colouring: green (557.7nm oxygen) at the base -> teal -> violet/red at the top
+  float a = clamp(h / height, 0.0, 1.0);
+  vec3 col = mix(vec3(0.12, 1.0, 0.46), vec3(0.10, 0.78, 0.62), smoothstep(0.15, 0.55, a));
+  col = mix(col, vec3(0.55, 0.18, 0.80), smoothstep(0.45, 1.0, a));
+  // Faint pink nitrogen fringe hugging the lower edge
+  col = mix(col, vec3(0.95, 0.35, 0.65), exp(-max(h, 0.0) * 90.0) * 0.30 * lower);
+
+  return col * intensity;
 }
 
 vec3 renderAurora(vec2 uv, float aspect) {
   if (uAurora <= 0.005) return vec3(0.0);
-  vec2 p = (uv - vec2(0.5, 0.45)) * vec2(aspect, 1.0);
-  float wave1 = sin(p.x * 3.2 + uTime * 0.35 + sin(p.x * 7.0 - uTime * 0.2) * 0.6);
-  float wave2 = sin(p.x * 5.1 - uTime * 0.28 + cos(p.x * 4.0 + uTime * 0.15) * 0.8);
-  float curtain1 = exp(-abs(uv.y - (0.68 + wave1 * 0.08)) * 9.5);
-  float curtain2 = exp(-abs(uv.y - (0.74 + wave2 * 0.07)) * 8.0);
-  float rays = 0.55 + 0.45 * sin(p.x * 28.0 + wave1 * 4.0 + uTime * 0.8);
-  vec3 col1 = vec3(0.10, 0.95, 0.58) * curtain1 * rays;
-  vec3 col2 = vec3(0.52, 0.22, 0.95) * curtain2 * (1.2 - rays * 0.5);
-  return (col1 + col2) * smoothstep(0.25, 0.6, uv.y) * uAurora;
+  vec3 c = auroraCurtain(uv, aspect, 0.08, 0.58, 0.0, 1.15);   // main curtain starting from the bottom
+  c += auroraCurtain(uv, aspect, 0.28, 0.45, 4.7, 0.55);       // fainter, higher curtain
+  return c * uAurora;
 }
 
 // ---------------------------------------------------------
@@ -242,23 +381,50 @@ float rainStreaks(vec2 uv, float aspect) {
   return acc;
 }
 
+// Soft, out-of-focus snowflakes with depth-of-field: 4 parallax layers from small,
+// slightly soft distant flakes to large, heavily blurred bokeh flakes close to the lens.
 float snowFlakes(vec2 uv, float aspect) {
   vec2 p = uv * vec2(aspect, 1.0);
   float acc = 0.0;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 4; i++) {
     float fi = float(i);
-    float scale = 11.0 + fi * 9.0;
+    float depth = fi / 3.0;                         // 0 = far, 1 = near
+    float scale = mix(24.0, 5.0, depth);            // near flakes are bigger / sparser
+    float fall = mix(0.045, 0.16, depth) * (0.7 + 0.4 * uWindSpeed); // screen units / sec (parallax)
+    float drift = 0.035 * uWindSpeed * (0.6 + depth);
+
     vec2 st = p * scale;
-    st.y += uTime * (0.42 - fi * 0.06) * (0.7 + 0.4 * uWindSpeed);
-    st.x += uTime * 0.22 * uWindSpeed + sin(uTime * 0.7 + fi * 2.0 + p.y * 3.0) * 0.35;
+    st.y += uTime * fall * scale;
+    st.x += uTime * drift * scale;
     vec2 id = floor(st);
     vec2 f = fract(st) - 0.5;
     float h = hash12(id + fi * 41.0);
-    float cutoff = mix(0.87, 0.56, uSnow);
+    float cutoff = mix(0.90, 0.55, uSnow) + depth * 0.04;
+
     if (h > cutoff) {
-      vec2 center = (vec2(fract(h * 17.3), fract(h * 29.1)) - 0.5) * 0.5;
-      float r = length(f - center);
-      acc += smoothstep(0.12, 0.01, r) * (0.9 - fi * 0.18);
+      // Flake center (kept well inside the cell so the soft falloff never gets clipped)
+      vec2 c = (vec2(fract(h * 17.3), fract(h * 29.1)) - 0.5) * 0.22;
+      c.x += sin(uTime * (0.6 + fract(h * 7.1)) + h * 6.2832) * 0.09; // gentle side-to-side flutter
+      vec2 d = f - c;
+
+      float size = mix(0.030, 0.085, depth) * (0.7 + 0.6 * fract(h * 51.3));
+      float r2 = dot(d, d) / (size * size);
+
+      // Faint 6-arm crystal structure, washed out by blur (skip trig on extreme near/far layers)
+      float crystal = 1.0;
+      if (i == 1 || i == 2) {
+        float ang = atan(d.y, d.x + 0.00001) + h * 6.2832 + uTime * 0.4 * (fract(h * 3.7) - 0.5);
+        float arms = 0.5 + 0.5 * cos(ang * 6.0);
+        float armStrength = 0.35 * (1.0 - abs(depth - 0.4) * 1.6);
+        crystal += armStrength * (arms - 0.5) * smoothstep(0.1, 0.9, r2);
+      }
+
+      // Gaussian blur: near flakes have a wider, dimmer falloff (bokeh)
+      float blur = mix(1.6, 0.75, depth);
+      float flake = exp(-r2 * blur) * crystal;
+
+      float brightness = mix(0.75, 0.42, depth) * (0.6 + 0.4 * fract(h * 91.7));
+      acc += flake * brightness;
     }
   }
   return acc;
@@ -276,7 +442,7 @@ void main() {
   float goldenWeight = exp(-pow((uSunElevation - 0.08) * 3.6, 2.0));
   float blueHourWeight = exp(-pow((uSunElevation + 0.18) * 4.5, 2.0));
   float nightWeight = 1.0 - smoothstep(-0.32, 0.04, uSunElevation);
-  float stormWeight = clamp(max(uStorm, (uCloudCover - 0.58) * 1.4 + uRain * 0.35), 0.0, 1.0);
+  float stormWeight = clamp(max(uStorm, max(uLoaderClouds * 0.65, (uCloudCover - 0.58) * 1.4 + uRain * 0.35)), 0.0, 1.0);
 
   // ---------------------------------------------------------
   // 1. Multi-Stop Atmospheric Sky Gradient (One UI Paris reference)
@@ -299,11 +465,11 @@ void main() {
   vec3 blueHorizon = vec3(0.46, 0.36, 0.48);
   vec3 blueLower   = vec3(0.08, 0.12, 0.20);
 
-  vec3 nightZenith  = vec3(0.015, 0.03, 0.09);
-  vec3 nightUpper   = vec3(0.03, 0.07, 0.18);
-  vec3 nightMid     = vec3(0.06, 0.13, 0.28);
-  vec3 nightHorizon = vec3(0.10, 0.20, 0.36);
-  vec3 nightLower   = vec3(0.03, 0.07, 0.13);
+  vec3 nightZenith  = vec3(0.004, 0.008, 0.026);
+  vec3 nightUpper   = vec3(0.009, 0.018, 0.052);
+  vec3 nightMid     = vec3(0.018, 0.036, 0.092);
+  vec3 nightHorizon = vec3(0.034, 0.064, 0.140);
+  vec3 nightLower   = vec3(0.010, 0.020, 0.048);
 
   vec3 stormZenith  = vec3(0.09, 0.13, 0.21);
   vec3 stormUpper   = vec3(0.14, 0.20, 0.29);
@@ -347,77 +513,113 @@ void main() {
   sky = mix(sky, cMid, smoothstep(0.24, 0.52, y));
   sky = mix(sky, cUpper, smoothstep(0.48, 0.78, y));
   sky = mix(sky, cZenith, smoothstep(0.72, 1.0, y));
+  if (uLoaderClouds > 0.005) {
+    sky = mix(sky, mix(stormUpper, stormZenith, 0.45), uLoaderClouds * 0.85);
+  }
+
+  // Cloud-layer footprint (screen-space, cheap). Computed up front so stars are hidden behind clouds.
+  float coverage = computeScreenCoverage(uv + mouseOffset * 0.25, aspect);
 
   if (nightWeight > 0.01) {
-    float stars = starField(uv + mouseOffset * 0.12, aspect) * nightWeight * (1.0 - stormWeight * 0.9) * (1.0 - uFog * 0.8);
-    sky += vec3(0.86, 0.93, 1.0) * stars;
+    // Stars vanish wherever the cloud layer is, and fade out globally as the sky clouds over
+    float starCloudMask = (1.0 - smoothstep(0.0, 0.25, coverage)) * (1.0 - smoothstep(0.45, 0.85, uCloudCover));
+    vec3 stars = renderStars(uv + mouseOffset * 0.12, aspect) * nightWeight * starCloudMask * (1.0 - stormWeight * 0.92) * (1.0 - uFog * 0.85);
+    sky += stars;
   }
   sky += renderAurora(uv, aspect);
 
   // ---------------------------------------------------------
-  // 2. Sun / Moon Position + Diagonal God Rays + Bokeh + Rainbow
+  // 2. Sun Position + Diagonal God Rays + Bokeh + Rainbow (Daytime / Twilight Only)
   // ---------------------------------------------------------
-  float sunY = mix(0.32, 0.88, clamp(abs(uSunElevation), 0.0, 1.0));
-  if (uSunElevation < 0.0 && uSunElevation > -0.25) {
-    sunY = mix(0.26, 0.45, (uSunElevation + 0.25) / 0.25);
-  }
+  float sunY = mix(0.26, 0.88, clamp(uSunElevation, 0.0, 1.0));
+  float sunAboveHorizon = smoothstep(-0.06, 0.04, uSunElevation);
   vec2 sunUv = vec2(
     clamp(uSunAzimuth + mouseOffset.x * 0.4, 0.05, 0.95),
     clamp(sunY + mouseOffset.y * 0.4, 0.18, 0.94)
   );
 
-  sky += renderRainbow(uv, sunUv, aspect);
+  sky += renderRainbow(uv, sunUv, aspect) * sunAboveHorizon;
 
   vec2 toSun = (uv - sunUv) * vec2(aspect, 1.0);
   float sunDist = max(0.0001, length(toSun));
 
   vec3 sunTint = mix(
     vec3(0.76, 0.86, 1.0),
-    mix(vec3(1.0, 0.97, 0.86), vec3(1.0, 0.68, 0.34), goldenWeight),
+    mix(vec3(1.0, 0.86, 0.56), vec3(1.0, 0.54, 0.18), goldenWeight),
     dayWeight
   );
 
-  float sunVis = mix(1.0, 0.15, clamp(stormWeight * 0.85 + uFog * 0.55, 0.0, 1.0));
+  float sunVis = mix(1.0, 0.15, clamp(stormWeight * 0.85 + uFog * 0.55, 0.0, 1.0)) * (1.0 - uLoaderClouds * 0.94);
 
-  float sunDisc = smoothstep(0.105, 0.014, sunDist) * 2.25;
-  float sunCorona = exp(-sunDist * 6.5) * 0.85 + exp(-sunDist * 2.2) * 0.24;
+  if (sunVis * sunAboveHorizon > 0.002) {
+    vec2 toSun = (uv - sunUv) * vec2(aspect, 1.0);
+    float sunDist = max(0.0001, length(toSun));
 
-  // Safe angle computation guarded against 0/0 division on Windows ANGLE / DirectX
-  float rayAngle = atan(toSun.y, toSun.x + 0.00001);
-  float shafts =
-    pow(max(0.0, 0.5 + 0.5 * sin(rayAngle * 14.0 + uTime * 0.12)), 2.0) * 0.45 +
-    pow(max(0.0, 0.5 + 0.5 * sin(rayAngle * 27.0 - uTime * 0.08 + 1.4)), 3.0) * 0.35 +
-    pow(max(0.0, 0.5 + 0.5 * sin(rayAngle * 7.0 + 0.5)), 2.0) * 0.20;
+    // Forward Mie scatter around the sun softly replaces cool blue sky with warm golden-hour amber
+    float mieGlow = exp(-sunDist * 4.5) * 0.58 + exp(-sunDist * 1.8) * 0.24;
+    vec3 goldenMie = mix(vec3(1.0, 0.58, 0.16), vec3(1.0, 0.38, 0.08), goldenWeight);
+    sky = mix(
+      sky,
+      sky * vec3(0.78, 0.64, 0.40) + goldenMie * 0.62,
+      clamp(mieGlow * dayWeight * sunVis * sunAboveHorizon * 1.15, 0.0, 0.85)
+    );
 
-  float downwardCone = smoothstep(0.35, -0.25, toSun.y);
-  float rayFalloff = exp(-sunDist * 1.1) * smoothstep(0.02, 0.18, sunDist);
-  float diagonalRays = shafts * downwardCone * rayFalloff * 0.78 * uGodRays;
+    float sunCore = smoothstep(0.044, 0.009, sunDist) * 0.95;
+    float sunInnerRing = exp(-sunDist * 11.0) * 0.52;
+    float sunCorona = exp(-sunDist * 3.4) * 0.24;
 
-  float bokeh =
-    (sunBokehGhost(uv, sunUv, 0.42, 0.055, aspect) * 0.16 +
-     sunBokehGhost(uv, sunUv, 0.68, 0.085, aspect) * 0.12 +
-     sunBokehGhost(uv, sunUv, 0.95, 0.042, aspect) * 0.14) * clamp(uGodRays, 0.0, 1.5);
+    // Safe angle computation guarded against 0/0 division on Windows ANGLE / DirectX
+    float rayAngle = atan(toSun.y, toSun.x + 0.00001);
+    float shafts =
+      pow(max(0.0, 0.5 + 0.5 * sin(rayAngle * 14.0 + uTime * 0.12)), 2.0) * 0.45 +
+      pow(max(0.0, 0.5 + 0.5 * sin(rayAngle * 27.0 - uTime * 0.08 + 1.4)), 3.0) * 0.35 +
+      pow(max(0.0, 0.5 + 0.5 * sin(rayAngle * 7.0 + 0.5)), 2.0) * 0.20;
 
-  sky += sunTint * (sunDisc + sunCorona + diagonalRays + bokeh) * sunVis * mix(0.35, 1.0, dayWeight);
+    float downwardCone = smoothstep(0.35, -0.25, toSun.y);
+    float rayFalloff = exp(-sunDist * 2.2) * smoothstep(0.025, 0.16, sunDist);
+    float diagonalRays = shafts * downwardCone * rayFalloff * 0.44 * uGodRays;
+
+    float bokeh = 0.0;
+    if (uGodRays > 0.01) {
+      bokeh =
+        (sunBokehGhost(uv, sunUv, 0.42, 0.055, aspect) * 0.16 +
+         sunBokehGhost(uv, sunUv, 0.68, 0.085, aspect) * 0.12 +
+         sunBokehGhost(uv, sunUv, 0.95, 0.042, aspect) * 0.14) * clamp(uGodRays, 0.0, 1.5);
+    }
+
+    vec3 coreTint = mix(vec3(0.86, 0.92, 1.0), mix(vec3(1.0, 0.95, 0.80), vec3(1.0, 0.78, 0.42), goldenWeight), dayWeight);
+    vec3 ringTint = mix(vec3(0.74, 0.85, 1.0), goldenMie, dayWeight);
+    vec3 rayTint = mix(sunTint, goldenMie, 0.45 * dayWeight);
+    vec3 solarLight =
+      coreTint * sunCore +
+      ringTint * (sunInnerRing + sunCorona) +
+      rayTint * (diagonalRays + bokeh);
+
+    sky += solarLight * sunVis * sunAboveHorizon;
+  }
 
   // ---------------------------------------------------------
   // 3. Optimized 3D Volumetric Raymarched Clouds with Screen-Space Early Culling
   // ---------------------------------------------------------
-  float coverage = computeScreenCoverage(uv + mouseOffset * 0.25, aspect);
-
   // FAST PATH: If this pixel is in clear sky or below the cloud layer, skip the raymarching loop completely!
   if (coverage > 0.005) {
+    vec3 skyBehind = sky; // sky colour at this pixel, used for aerial-perspective blending
     vec3 ro = vec3(p.x, p.y, -1.0);
     vec3 rd = normalize(vec3(p.x * 0.28, p.y * 0.28, 1.0));
     vec3 sunDir3D = normalize(vec3((sunUv - uv) * vec2(aspect, 1.0), 0.45));
+    if (uLoaderClouds > 0.005) {
+      sunDir3D = normalize(mix(sunDir3D, vec3(-0.35, 0.72, 0.58), uLoaderClouds));
+    }
 
     float cosTheta = dot(rd, sunDir3D);
-    float silverLiningPhase = hgPhase(cosTheta, 0.65);
+    float silverLiningPhase = hgPhase(cosTheta, 0.65) * (1.0 - smoothstep(0.0, 0.55, uLoaderClouds) * 0.8);
 
     vec4 cloudAcc = vec4(0.0);
-    const int STEPS = 14; // Tuned for 60-120fps with zero visual loss
-    float stepLen = 0.062;
-    float t = -0.35 + hash12(gl_FragCoord.xy + fract(uTime)) * stepLen;
+    // Fixed (non-jittered) start: a per-pixel random offset caused visible flickering grain.
+    // Slightly more, shorter steps keep the result free of slicing/banding without the noise.
+    const int STEPS = 18;
+    float stepLen = 0.048;
+    float t = -0.35;
 
     for (int i = 0; i < STEPS; i++) {
       if (cloudAcc.a > 0.95) break; // Early opacity saturation exit
@@ -429,18 +631,32 @@ void main() {
         float dShadow1 = sampleCloudShadowCoarse(pos + sunDir3D * 0.10, coverage);
         float dShadow2 = sampleCloudShadowCoarse(pos + sunDir3D * 0.22, coverage);
         float opticalDepth = (dShadow1 * 1.9 + dShadow2 * 1.5);
-        float lightTransmittance = exp(-opticalDepth * 2.8);
+        float lightTransmittance = exp(-opticalDepth * mix(2.0, 0.85, uLoaderClouds));
 
         float powder = 1.0 - exp(-d * 5.2);
 
-        vec3 shadowColor = mix(
-          vec3(0.42, 0.63, 0.86),
+        // Daytime cloud palette
+        vec3 dayShadow = mix(
+          vec3(0.64, 0.73, 0.85),
           vec3(0.20, 0.26, 0.36),
           stormWeight
         );
-        shadowColor = mix(vec3(0.09, 0.14, 0.25), shadowColor, dayWeight);
+        vec3 dayLitColor = mix(vec3(0.99, 0.995, 1.0), sunTint, 0.32) * (0.94 + silverLiningPhase * 0.56 * sunAboveHorizon);
 
-        vec3 litColor = mix(vec3(0.99, 0.995, 1.0), sunTint, 0.32) * (1.12 + silverLiningPhase * 0.65);
+        // Twilight / night palette derived from the current sky gradient so clouds sit *in* the sky:
+        // shadowed sides pick up the mauve/indigo upper sky, lit sides pick up the warm horizon + sun.
+        vec3 twShadow = mix(cMid, cUpper, 0.55) * 0.80 + cZenith * 0.08;
+        vec3 twLit = mix(cHorizon, sunTint * 1.1, 0.45 * goldenWeight * sunAboveHorizon) *
+                     (1.02 + silverLiningPhase * 0.45 * sunAboveHorizon);
+        twLit = mix(twLit, mix(cMid, cHorizon, 0.6) * 1.25, nightWeight);
+
+        float dayMix = smoothstep(0.35, 0.95, dayWeight) * (1.0 - goldenWeight * 0.7);
+        vec3 shadowColor = mix(twShadow, dayShadow, dayMix);
+        vec3 litColor = mix(twLit, dayLitColor, dayMix);
+        if (uLoaderClouds > 0.005) {
+          shadowColor = mix(shadowColor, vec3(0.08, 0.13, 0.22), uLoaderClouds * 0.88);
+          litColor = mix(litColor, vec3(0.32, 0.42, 0.56), uLoaderClouds * 0.88);
+        }
 
         if (uStorm > 0.15) {
           float flash = pow(max(0.0, sin(uTime * 4.2) * sin(uTime * 12.3 + pos.x * 2.8)), 12.0);
@@ -449,8 +665,14 @@ void main() {
 
         float lightFactor = clamp(lightTransmittance * (0.50 + 0.50 * powder), 0.0, 1.0);
         vec3 voxelColor = mix(shadowColor, litColor, lightFactor);
+        // Aerial perspective: at twilight/night pull clouds toward the sky behind them so they
+        // blend into the gradient instead of looking pasted on (stronger on thin, wispy parts).
+        float aerial = (1.0 - dayMix) * mix(0.55, 0.30, powder);
+        voxelColor = mix(voxelColor, skyBehind, aerial);
 
-        float baseAO = smoothstep(-0.32, 0.18, pos.y);
+        float normalBaseAO = mix(0.22, 0.10, clamp(CLOUD_AMOUNT, 0.0, 1.0));
+        float cloudBase = mix(normalBaseAO, -0.95, smoothstep(0.0, 0.08, uLoaderClouds));
+        float baseAO = smoothstep(cloudBase, cloudBase + 0.5, pos.y);
         voxelColor *= (0.80 + 0.20 * baseAO);
 
         float alpha = (1.0 - exp(-d * 2.6)) * (1.0 - cloudAcc.a);

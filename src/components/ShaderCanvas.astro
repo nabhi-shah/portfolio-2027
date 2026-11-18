@@ -12,6 +12,7 @@
       __shaderStage?: ShaderStage;
       __pendingWeatherState?: WeatherState;
       __pendingWeatherPreset?: ShaderWeatherTarget;
+      __loaderCompleted?: boolean;
     }
   }
 
@@ -29,6 +30,10 @@
       stage.setPreset(window.__pendingWeatherPreset);
     }
 
+    if (window.__loaderCompleted) {
+      stage.completeLoader();
+    }
+
     container.classList.add('is-ready');
   };
 
@@ -42,11 +47,16 @@
     window.__shaderStage?.setPreset(e.detail);
   }) as EventListener);
 
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(() => mountShader(), { timeout: 150 });
-  } else {
-    requestAnimationFrame(() => setTimeout(mountShader, 0));
-  }
+  window.addEventListener(
+    'loader:complete',
+    () => {
+      window.__loaderCompleted = true;
+      window.__shaderStage?.completeLoader();
+    },
+    { once: true }
+  );
+
+  mountShader();
 </script>
 
 <style>
@@ -56,7 +66,14 @@
     z-index: 0;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.25s ease-out;
+  }
+
+  .webgl-stage.is-blurred {
+    filter: blur(var(--bg-blur, 0px));
+    transform: scale(var(--bg-scale, 1));
+    transform-origin: center center;
+    will-change: transform, filter;
   }
 
   .webgl-stage.is-ready {

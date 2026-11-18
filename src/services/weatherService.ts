@@ -19,7 +19,7 @@ export function decodeWMO(code: number, cloudCoverPct = 18): WMOInfo {
         isDay
           ? `Sunlit sky with crisp visibility. High ${max}° · Low ${min}°`
           : `Clear starry sky tonight. Low around ${min}°`,
-      clouds: Math.max(0.16, c * 0.45),
+      clouds: 0, // Clear sky: no clouds
       rain: 0,
       storm: 0,
       snow: 0

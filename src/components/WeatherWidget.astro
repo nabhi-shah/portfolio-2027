@@ -1,0 +1,718 @@
+---
+const panels = [
+  { id: 'you', label: 'You', cityFallback: 'Columbus' },
+  { id: 'me', label: 'Me', cityFallback: 'New York' },
+] as const;
+
+const HOURLY_COUNT = 6;
+---
+
+<aside
+  id="weather-widget"
+  class="weather-widget"
+  aria-label="Interactive atmospheric weather widget"
+  inert
+>
+  <!-- SVG masks: true Figma 60% corner smoothing (continuous squircles) -->
+  <svg
+    class="ww-svg-defs"
+    width="0"
+    height="0"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <defs>
+      <mask id="ww-shell-mask" maskContentUnits="objectBoundingBox">
+        <rect x="0" y="0" width="1" height="1" fill="black" />
+        <path
+          fill="white"
+          d="M 0.1739 0.1025 C 0.1739 0.0697 0.1780 0.0392 0.1890 0.0221 C 0.2008 0.0060 0.2217 0.0000 0.2441 0.0000 L 0.8891 0.0000 C 0.9246 0.0000 0.9576 0.0095 0.9761 0.0349 C 0.9935 0.0619 1.0000 0.1101 1.0000 0.1619 L 1.0000 0.8381 C 1.0000 0.8899 0.9935 0.9381 0.9761 0.9651 C 0.9576 0.9905 0.9246 1.0000 0.8891 1.0000 L 0.1109 1.0000 C 0.0754 1.0000 0.0424 0.9905 0.0239 0.9651 C 0.0065 0.9381 0.0000 0.8899 0.0000 0.8381 L 0.0000 0.3565 C 0.0000 0.3237 0.0041 0.2932 0.0151 0.2761 C 0.0268 0.2600 0.0477 0.2540 0.0702 0.2540 L 0.1037 0.2540 C 0.1262 0.2540 0.1471 0.2479 0.1588 0.2319 C 0.1698 0.2148 0.1739 0.1842 0.1739 0.1514 Z"
+        />
+      </mask>
+
+      <mask id="ww-tile-mask" maskContentUnits="objectBoundingBox">
+        <rect x="0" y="0" width="1" height="1" fill="black" />
+        <path
+          fill="white"
+          d="M 0.0000 0.4533 C 0.0000 0.3083 0.0267 0.1733 0.0976 0.0976 C 0.1733 0.0267 0.3083 0.0000 0.4533 0.0000 L 0.5467 0.0000 C 0.6917 0.0000 0.8267 0.0267 0.9024 0.0976 C 0.9733 0.1733 1.0000 0.3083 1.0000 0.4533 L 1.0000 0.5467 C 1.0000 0.6917 0.9733 0.8267 0.9024 0.9024 C 0.8267 0.9733 0.6917 1.0000 0.5467 1.0000 L 0.4533 1.0000 C 0.3083 1.0000 0.1733 0.9733 0.0976 0.9024 C 0.0267 0.8267 0.0000 0.6917 0.0000 0.5467 Z"
+        />
+      </mask>
+    </defs>
+  </svg>
+
+  <!-- Soft outer elevation shadows kept outside blur layers so backdrop-filter samples live canvas -->
+  <div class="ww-tile-shadow-wrap" aria-hidden="true">
+    <div class="ww-tile-shadow"></div>
+  </div>
+  <div class="ww-shell-shadow-wrap" aria-hidden="true">
+    <div class="ww-shell-shadow"></div>
+  </div>
+
+  <!-- Top-left 54x54 Logo Squircle (60% corner smoothing, frosted blur + nabhi.site emblem) -->
+  <div class="ww-logo-glass" aria-hidden="true"></div>
+  <a
+    href="https://nabhi.site"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="ww-logo-link"
+    aria-label="Nabhi personal site (opens nabhi.site)"
+    title="nabhi.site"
+  >
+    <svg
+      class="ww-logo-svg"
+      viewBox="0 0 180 180"
+      role="img"
+      aria-label="Nabhi monogram logo"
+    >
+      <path
+        fill="currentColor"
+        fill-rule="evenodd"
+        d="M 51.67 22.56 Q 53.42 22.43 55.95 22.61 Q 58.47 22.79 61.77 23.76 Q 65.06 24.73 69.12 26.50 Q 73.19 28.26 77.01 30.39 Q 80.84 32.52 84.43 35.01 Q 88.02 37.51 91.45 40.38 Q 94.88 43.25 98.15 46.50 Q 101.41 49.75 103.66 52.16 Q 105.90 54.56 107.12 56.12 Q 108.33 57.69 109.85 59.94 Q 111.36 62.19 113.16 65.12 Q 114.96 68.06 116.36 70.73 Q 117.76 73.40 118.76 75.80 Q 119.75 78.20 120.51 80.45 Q 121.27 82.70 121.79 84.80 Q 122.31 86.90 122.83 90.01 Q 123.35 93.12 123.86 97.25 Q 124.38 101.38 124.56 106.69 Q 124.73 112.00 124.57 118.50 Q 124.41 125.00 124.76 127.56 Q 125.11 130.12 125.98 128.75 Q 126.84 127.38 127.64 125.31 Q 128.44 123.25 129.17 120.50 Q 129.90 117.75 130.42 115.19 Q 130.93 112.62 131.24 110.25 Q 131.54 107.88 131.69 105.41 Q 131.84 102.94 131.84 100.38 Q 131.84 97.81 131.46 94.38 Q 131.07 90.94 130.31 86.62 Q 129.55 82.31 128.06 77.28 Q 126.58 72.25 124.38 66.50 Q 122.18 60.75 121.08 56.75 Q 119.98 52.75 119.98 50.50 Q 119.98 48.25 120.24 46.62 Q 120.50 45.00 121.02 44.00 Q 121.54 43.00 122.35 42.00 Q 123.17 41.01 124.28 40.01 Q 125.39 39.02 126.88 38.14 Q 128.38 37.25 130.25 36.47 Q 132.12 35.69 134.00 35.30 Q 135.88 34.90 137.75 34.89 Q 139.62 34.88 140.96 35.02 Q 142.30 35.16 143.09 35.44 Q 143.89 35.72 144.79 36.24 Q 145.70 36.75 146.72 37.51 Q 147.73 38.26 148.72 39.23 Q 149.71 40.20 150.67 41.38 Q 151.63 42.57 152.50 43.88 Q 153.37 45.19 154.15 46.62 Q 154.93 48.06 155.81 50.53 Q 156.70 53.00 157.68 56.50 Q 158.67 60.00 159.32 63.00 Q 159.97 66.00 160.28 68.50 Q 160.59 71.00 160.74 73.72 Q 160.89 76.44 160.89 79.38 Q 160.89 82.31 160.51 86.25 Q 160.12 90.19 159.34 95.12 Q 158.56 100.06 157.55 104.25 Q 156.53 108.44 155.28 111.88 Q 154.02 115.31 152.89 117.97 Q 151.76 120.62 150.74 122.50 Q 149.73 124.38 148.22 126.75 Q 146.71 129.12 144.70 132.00 Q 142.69 134.88 140.66 137.41 Q 138.64 139.95 136.59 142.15 Q 134.55 144.35 132.54 146.23 Q 130.54 148.10 128.59 149.65 Q 126.63 151.20 124.88 152.36 Q 123.13 153.53 121.59 154.31 Q 120.04 155.08 118.52 155.57 Q 117.00 156.06 115.50 156.26 Q 114.00 156.46 112.95 156.45 Q 111.89 156.43 111.29 156.21 Q 110.68 155.98 110.13 155.61 Q 109.57 155.25 109.06 154.75 Q 108.56 154.25 108.18 153.56 Q 107.81 152.88 107.56 152.00 Q 107.32 151.12 107.17 149.47 Q 107.02 147.81 106.96 145.38 Q 106.91 142.94 107.13 139.72 Q 107.35 136.50 107.85 132.50 Q 108.34 128.50 108.63 124.28 Q 108.91 120.06 108.99 115.62 Q 109.06 111.19 108.93 107.50 Q 108.79 103.81 108.46 100.88 Q 108.12 97.94 107.57 95.19 Q 107.01 92.44 106.24 89.88 Q 105.48 87.31 104.34 84.59 Q 103.20 81.88 101.69 79.00 Q 100.18 76.12 98.19 73.27 Q 96.19 70.42 93.71 67.59 Q 91.23 64.77 88.68 62.38 Q 86.12 59.99 83.50 58.04 Q 80.88 56.09 78.56 54.75 Q 76.25 53.41 74.25 52.67 Q 72.25 51.94 70.72 51.69 Q 69.19 51.44 68.12 51.68 Q 67.06 51.92 66.40 52.27 Q 65.74 52.62 65.48 53.08 Q 65.22 53.54 65.11 54.14 Q 65.00 54.75 65.04 55.50 Q 65.08 56.25 66.68 60.58 Q 68.28 64.90 71.43 72.80 Q 74.59 80.71 76.69 86.74 Q 78.78 92.77 79.81 96.93 Q 80.84 101.09 81.36 105.08 Q 81.88 109.06 81.88 112.88 Q 81.88 116.69 81.36 120.12 Q 80.84 123.54 79.81 126.59 Q 78.78 129.63 77.62 132.13 Q 76.45 134.63 75.15 136.59 Q 73.85 138.54 72.09 140.55 Q 70.33 142.56 68.11 144.62 Q 65.89 146.69 63.54 148.47 Q 61.19 150.25 58.71 151.76 Q 56.23 153.26 53.71 154.37 Q 51.19 155.48 48.62 156.19 Q 46.06 156.91 43.62 157.17 Q 41.19 157.43 38.88 157.24 Q 36.56 157.05 34.66 156.54 Q 32.75 156.03 31.25 155.21 Q 29.75 154.38 28.34 153.23 Q 26.94 152.08 25.62 150.61 Q 24.31 149.13 23.29 147.72 Q 22.26 146.31 21.52 144.95 Q 20.78 143.60 20.26 142.33 Q 19.75 141.06 19.46 139.88 Q 19.16 138.69 19.02 137.53 Q 18.88 136.38 18.89 135.25 Q 18.90 134.12 19.04 133.19 Q 19.19 132.25 19.46 131.49 Q 19.73 130.74 20.27 129.89 Q 20.81 129.04 21.62 128.09 Q 22.44 127.14 23.39 126.39 Q 24.34 125.65 25.43 125.10 Q 26.51 124.55 28.92 123.88 Q 31.33 123.20 35.05 122.41 Q 38.78 121.61 41.29 120.95 Q 43.81 120.29 45.12 119.77 Q 46.44 119.24 47.71 118.45 Q 48.98 117.66 50.21 116.61 Q 51.44 115.55 52.30 114.46 Q 53.16 113.38 53.65 112.25 Q 54.14 111.12 54.39 109.44 Q 54.64 107.75 54.65 105.50 Q 54.67 103.25 53.60 97.78 Q 52.53 92.31 50.38 83.62 Q 48.23 74.94 46.78 67.84 Q 45.33 60.75 44.59 55.25 Q 43.84 49.75 43.46 45.66 Q 43.09 41.56 43.09 38.88 Q 43.09 36.19 43.19 34.31 Q 43.29 32.44 43.49 31.38 Q 43.69 30.31 44.18 29.12 Q 44.67 27.94 45.45 26.62 Q 46.23 25.31 47.10 24.44 Q 47.98 23.56 48.95 23.12 Q 49.92 22.69 51.67 22.56 Z"
+      />
+    </svg>
+  </a>
+
+  <!-- Masked Frosted Glass L-Shell (separate sibling from unmasked text layer) -->
+  <div class="ww-glass-backdrop" aria-hidden="true"></div>
+
+  <!-- Reduced hairline stroke + directional sunlight rim bloom -->
+  <svg
+    class="ww-rim-svg"
+    viewBox="0 0 368 252"
+    preserveAspectRatio="none"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <defs>
+      <linearGradient
+        id="ww-sun-stroke-grad"
+        gradientUnits="userSpaceOnUse"
+        x1="340"
+        y1="16"
+        x2="24"
+        y2="236"
+      >
+        <stop offset="0%" stop-color="#ffe5a3" stop-opacity="0.62" />
+        <stop offset="36%" stop-color="#ffd07b" stop-opacity="0.28" />
+        <stop offset="72%" stop-color="#c4d9ff" stop-opacity="0.10" />
+        <stop offset="100%" stop-color="#90add8" stop-opacity="0.06" />
+      </linearGradient>
+
+      <linearGradient
+        id="ww-tile-stroke-grad"
+        gradientUnits="userSpaceOnUse"
+        x1="50"
+        y1="4"
+        x2="4"
+        y2="50"
+      >
+        <stop offset="0%" stop-color="#ffe5a3" stop-opacity="0.64" />
+        <stop offset="44%" stop-color="#ffd07b" stop-opacity="0.26" />
+        <stop offset="100%" stop-color="#a5c0e8" stop-opacity="0.08" />
+      </linearGradient>
+
+      <filter id="ww-edge-bloom" x="-16%" y="-16%" width="132%" height="132%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="2.8" result="wide" />
+        <feGaussianBlur in="SourceGraphic" stdDeviation="0.9" result="tight" />
+        <feMerge>
+          <feMergeNode in="wide" />
+          <feMergeNode in="tight" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+
+    <!-- Thin L-shell directional bloom + crisp hairline edge -->
+    <path
+      class="ww-rim-glow"
+      fill="none"
+      stroke="url(#ww-sun-stroke-grad)"
+      stroke-width="1.35"
+      filter="url(#ww-edge-bloom)"
+      d="M 64.5000 25.6600 C 64.5000 17.6088 65.9800 10.1200 69.9186 5.9186 C 74.1200 1.9800 81.6088 0.5000 89.6600 0.5000 L 327.3800 0.5000 C 340.2184 0.5000 352.1600 2.8600 358.8594 9.1405 C 365.1400 15.8400 367.5000 27.7816 367.5000 40.6200 L 367.5000 211.3800 C 367.5000 224.2184 365.1400 236.1600 358.8594 242.8595 C 352.1600 249.1400 340.2184 251.5000 327.3800 251.5000 L 40.6200 251.5000 C 27.7816 251.5000 15.8400 249.1400 9.1405 242.8595 C 2.8600 236.1600 0.5000 224.2184 0.5000 211.3800 L 0.5000 89.6600 C 0.5000 81.6088 1.9800 74.1200 5.9186 69.9186 C 10.1200 65.9800 17.6088 64.5000 25.6600 64.5000 L 37.9800 64.5000 C 46.4664 64.5000 54.3600 62.9400 58.7884 58.7884 C 62.9400 54.3600 64.5000 46.4664 64.5000 37.9800 Z"
+    />
+    <path
+      class="ww-rim-crisp"
+      fill="none"
+      stroke="url(#ww-sun-stroke-grad)"
+      stroke-width="0.7"
+      vector-effect="non-scaling-stroke"
+      d="M 64.5000 25.6600 C 64.5000 17.6088 65.9800 10.1200 69.9186 5.9186 C 74.1200 1.9800 81.6088 0.5000 89.6600 0.5000 L 327.3800 0.5000 C 340.2184 0.5000 352.1600 2.8600 358.8594 9.1405 C 365.1400 15.8400 367.5000 27.7816 367.5000 40.6200 L 367.5000 211.3800 C 367.5000 224.2184 365.1400 236.1600 358.8594 242.8595 C 352.1600 249.1400 340.2184 251.5000 327.3800 251.5000 L 40.6200 251.5000 C 27.7816 251.5000 15.8400 249.1400 9.1405 242.8595 C 2.8600 236.1600 0.5000 224.2184 0.5000 211.3800 L 0.5000 89.6600 C 0.5000 81.6088 1.9800 74.1200 5.9186 69.9186 C 10.1200 65.9800 17.6088 64.5000 25.6600 64.5000 L 37.9800 64.5000 C 46.4664 64.5000 54.3600 62.9400 58.7884 58.7884 C 62.9400 54.3600 64.5000 46.4664 64.5000 37.9800 Z"
+    />
+
+    <!-- Thin 54x54 logo squircle directional bloom + crisp hairline edge -->
+    <path
+      class="ww-rim-glow"
+      fill="none"
+      stroke="url(#ww-tile-stroke-grad)"
+      stroke-width="1.35"
+      filter="url(#ww-edge-bloom)"
+      d="M 0.5000 24.3000 C 0.5000 16.6840 1.9000 9.6000 5.6258 5.6258 C 9.6000 1.9000 16.6840 0.5000 24.3000 0.5000 L 29.7000 0.5000 C 37.3160 0.5000 44.4000 1.9000 48.3743 5.6258 C 52.1000 9.6000 53.5000 16.6840 53.5000 24.3000 L 53.5000 29.7000 C 53.5000 37.3160 52.1000 44.4000 48.3743 48.3743 C 44.4000 52.1000 37.3160 53.5000 29.7000 53.5000 L 24.3000 53.5000 C 16.6840 53.5000 9.6000 52.1000 5.6258 48.3743 C 1.9000 44.4000 0.5000 37.3160 0.5000 29.7000 Z"
+    />
+    <path
+      class="ww-rim-crisp"
+      fill="none"
+      stroke="url(#ww-tile-stroke-grad)"
+      stroke-width="0.7"
+      vector-effect="non-scaling-stroke"
+      d="M 0.5000 24.3000 C 0.5000 16.6840 1.9000 9.6000 5.6258 5.6258 C 9.6000 1.9000 16.6840 0.5000 24.3000 0.5000 L 29.7000 0.5000 C 37.3160 0.5000 44.4000 1.9000 48.3743 5.6258 C 52.1000 9.6000 53.5000 16.6840 53.5000 24.3000 L 53.5000 29.7000 C 53.5000 37.3160 52.1000 44.4000 48.3743 48.3743 C 44.4000 52.1000 37.3160 53.5000 29.7000 53.5000 L 24.3000 53.5000 C 16.6840 53.5000 9.6000 52.1000 5.6258 48.3743 C 1.9000 44.4000 0.5000 37.3160 0.5000 29.7000 Z"
+    />
+  </svg>
+
+  <!-- Unmasked Foreground UI Shell -->
+  <div class="ww-foreground">
+    <!-- Top Right Shelf (beside small 54x54 logo): clean Allo-inspired sliding segmented tabs -->
+    <header class="ww-top-shelf">
+      <div class="ww-tablist" role="tablist" aria-label="Location weather view" data-active-idx="0">
+        <span class="ww-seg-pill" aria-hidden="true"></span>
+        {
+          panels.map((p, idx) => (
+            <button
+              type="button"
+              role="tab"
+              id={`ww-tab-${p.id}`}
+              class="ww-tab"
+              aria-selected={idx === 0 ? 'true' : 'false'}
+              aria-controls={`ww-panel-${p.id}`}
+              tabindex={idx === 0 ? 0 : -1}
+              data-tab={p.id}
+            >
+              {p.label}
+            </button>
+          ))
+        }
+      </div>
+    </header>
+
+    <!-- Clean Weather Body (matching minimal iOS medium weather widget) -->
+    <div class="ww-body">
+      {
+        panels.map((p, idx) => (
+          <div
+            role="tabpanel"
+            id={`ww-panel-${p.id}`}
+            class="ww-panel"
+            aria-labelledby={`ww-tab-${p.id}`}
+            hidden={idx !== 0}
+          >
+            <div class="ww-hero-row">
+              <div class="ww-hero-left">
+                <h2 class="ww-city" data-field="city">
+                  {p.cityFallback}
+                </h2>
+                <div class="ww-temp" data-field="temp">
+                  --°
+                </div>
+              </div>
+
+              <div class="ww-hero-right">
+                <span class="ww-hero-icon" data-field="heroIcon" aria-hidden="true" />
+                <div class="ww-condition" data-field="condition">
+                  Clear
+                </div>
+                <div class="ww-hl" data-field="hl">
+                  H:--° L:--°
+                </div>
+              </div>
+            </div>
+
+            <div class="ww-hourly-row" data-field="hourlyGrid" aria-hidden="true">
+              {Array.from({ length: HOURLY_COUNT }).map(() => (
+                <div class="ww-hour-col">
+                  <span class="ww-hour-time">--</span>
+                  <span class="ww-hour-icon" />
+                  <span class="ww-hour-temp">--°</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Accessible data table alternative */}
+            <table class="ww-sr-only" data-field="hourlyTable">
+              <caption>Upcoming 6-hour temperature forecast</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Time</th>
+                  <th scope="col">Temp</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Now</td>
+                  <td>--°</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</aside>
+
+<style>
+  .weather-widget {
+    --ww-w: min(368px, calc(100vw - 1.5rem));
+    --sun-hit-x: 84%;
+    --sun-hit-y: 16%;
+    --sun-rim-deg: 132deg;
+    --sun-bloom: 0.72;
+    --ww-glow-rgb: 255, 214, 120;
+    --ww-shadow-x: -4px;
+    --ww-shadow-y: 16px;
+
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 42;
+    width: var(--ww-w);
+    aspect-ratio: 368 / 252;
+
+    font-family: 'Allo', system-ui, -apple-system, sans-serif;
+    font-variation-settings: 'ROND' 50;
+    -webkit-font-smoothing: antialiased;
+    color: #f7f9ff;
+
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px)) scale(0.985);
+    pointer-events: none;
+    transition:
+      opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .weather-widget.is-revealed {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    pointer-events: auto;
+  }
+
+  .ww-svg-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  /* Directional elevation shadows outside backdrop-filter layers */
+  .ww-tile-shadow-wrap {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 14.6739%;
+    height: 21.4286%;
+    pointer-events: none;
+    transform: translate(calc(var(--ww-shadow-x) * 0.4), calc(var(--ww-shadow-y) * 0.35));
+    filter: blur(14px);
+    opacity: 0.56;
+  }
+
+  .ww-tile-shadow {
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(
+      100% 100% at var(--sun-hit-x) var(--sun-hit-y),
+      rgba(var(--ww-glow-rgb), calc(var(--sun-bloom) * 0.16)),
+      rgba(4, 9, 24, 0.42)
+    );
+    -webkit-mask-image: url(#ww-tile-mask);
+    mask-image: url(#ww-tile-mask);
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+
+  .ww-shell-shadow-wrap {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    transform: translate(calc(var(--ww-shadow-x) * 0.45), calc(var(--ww-shadow-y) * 0.42));
+    filter: blur(18px);
+    opacity: 0.6;
+  }
+
+  .ww-shell-shadow {
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(
+      92% 92% at var(--sun-hit-x) var(--sun-hit-y),
+      rgba(var(--ww-glow-rgb), calc(var(--sun-bloom) * 0.14)),
+      rgba(4, 9, 24, 0.36)
+    );
+    -webkit-mask-image: url(#ww-shell-mask);
+    mask-image: url(#ww-shell-mask);
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+
+  /* Smaller 54x54 frosted logo squircle */
+  .ww-logo-glass {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 14.6739%;
+    height: 21.4286%;
+    pointer-events: none;
+    isolation: isolate;
+    background:
+      radial-gradient(
+        130% 130% at var(--sun-hit-x) var(--sun-hit-y),
+        rgba(var(--ww-glow-rgb), calc(0.12 + var(--sun-bloom) * 0.26)) 0%,
+        rgba(var(--ww-glow-rgb), calc(var(--sun-bloom) * 0.06)) 48%,
+        transparent 76%
+      ),
+      linear-gradient(
+        var(--sun-rim-deg),
+        rgba(255, 255, 255, 0.13) 0%,
+        rgba(15, 24, 44, 0.42) 60%,
+        rgba(8, 13, 28, 0.54) 100%
+      );
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    -webkit-mask-image: url(#ww-tile-mask);
+    mask-image: url(#ww-tile-mask);
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+
+  .ww-logo-link {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    width: 14.6739%;
+    height: 21.4286%;
+    border-radius: 33%;
+    display: grid;
+    place-items: center;
+    color: #fffaf0;
+    text-decoration: none;
+    transition: transform 0.25s ease, color 0.25s ease;
+  }
+
+  .ww-logo-link:hover,
+  .ww-logo-link:focus-visible {
+    transform: scale(1.045);
+    color: #ffffff;
+  }
+
+  .ww-logo-link:focus-visible {
+    outline: 2px solid #ffe49c;
+    outline-offset: 3px;
+  }
+
+  .ww-logo-svg {
+    width: 56%;
+    height: 56%;
+    display: block;
+    filter: drop-shadow(
+      0 0 calc(3px + var(--sun-bloom) * 6px) rgba(var(--ww-glow-rgb), calc(0.18 + var(--sun-bloom) * 0.42))
+    );
+  }
+
+  /* L-notched frosted main shell backdrop */
+  .ww-glass-backdrop {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    isolation: isolate;
+    background:
+      radial-gradient(
+        118% 95% at var(--sun-hit-x) var(--sun-hit-y),
+        rgba(var(--ww-glow-rgb), calc(0.10 + var(--sun-bloom) * 0.24)) 0%,
+        rgba(var(--ww-glow-rgb), calc(var(--sun-bloom) * 0.06)) 38%,
+        transparent 68%
+      ),
+      linear-gradient(
+        var(--sun-rim-deg),
+        rgba(255, 255, 255, 0.12) 0%,
+        rgba(18, 30, 54, 0.36) 46%,
+        rgba(10, 17, 34, 0.50) 100%
+      );
+    backdrop-filter: blur(26px) saturate(155%);
+    -webkit-backdrop-filter: blur(26px) saturate(155%);
+    -webkit-mask-image: url(#ww-shell-mask);
+    mask-image: url(#ww-shell-mask);
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+
+  .ww-rim-svg {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .ww-rim-glow {
+    opacity: calc(0.28 + var(--sun-bloom) * 0.58);
+    transition: opacity 0.35s ease;
+  }
+
+  .ww-foreground {
+    position: relative;
+    z-index: 4;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Top Right Shoulder: clean Allo pill segmented control beside small 54x54 logo notch */
+  .ww-top-shelf {
+    margin-left: 17.3913%;
+    height: 25.3968%;
+    padding: 0 1.05rem 0 0.72rem;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .ww-tablist {
+    --tab-idx: 0;
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 0.75px solid rgba(255, 255, 255, 0.16);
+  }
+
+  .ww-tablist[data-active-idx='1'] {
+    --tab-idx: 1;
+  }
+
+  .ww-seg-pill {
+    position: absolute;
+    z-index: -1;
+    top: 3px;
+    left: 3px;
+    width: calc(50% - 4px);
+    height: calc(100% - 6px);
+    border-radius: 999px;
+    background: linear-gradient(
+      var(--sun-rim-deg),
+      rgba(255, 255, 255, 0.28) 0%,
+      rgba(var(--ww-glow-rgb), calc(0.14 + var(--sun-bloom) * 0.22)) 100%
+    );
+    border: 0.75px solid rgba(255, 255, 255, 0.28);
+    translate: calc(var(--tab-idx) * (100% + 2px)) 0;
+    transition: translate 0.36s cubic-bezier(0.3, 1.25, 0.5, 1);
+  }
+
+  .ww-tab {
+    position: relative;
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(245, 248, 255, 0.68);
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1;
+    padding: 0.38rem 0.95rem 0.44rem;
+    min-block-size: 1.65rem;
+    min-inline-size: 3.1rem;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: color 0.22s ease;
+  }
+
+  .ww-tab:hover:not([aria-selected='true']) {
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .ww-tab:focus-visible {
+    outline: 2px solid #ffe49c;
+    outline-offset: 2px;
+  }
+
+  .ww-tab[aria-selected='true'] {
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  /* Forced-colors-safe non-color indicator (minimal clean border dash under selected tab) */
+  .ww-tab[aria-selected='true']::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 0.22rem;
+    width: 0.65rem;
+    translate: -50% 0;
+    border-block-end: 1.25px solid currentColor;
+    opacity: 0.75;
+  }
+
+  /* Lower Simple Apple Weather Body */
+  .ww-body {
+    flex: 1;
+    padding: 0.48rem 1.12rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .ww-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 0;
+  }
+
+  .ww-panel[hidden] {
+    display: none;
+  }
+
+  .ww-hero-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .ww-hero-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.08rem;
+    min-width: 0;
+  }
+
+  /* Headings ONLY use Averia Serif Libre */
+  .ww-city {
+    margin: 0;
+    font-family: 'Averia Serif Libre', Georgia, serif;
+    font-size-adjust: from-font;
+    font-size: 1.12rem;
+    font-weight: 400;
+    line-height: 1.15;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ww-temp {
+    font-size: 2.65rem;
+    font-weight: 300;
+    line-height: 0.96;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    font-variation-settings: 'ROND' 40, 'opsz' 32;
+    color: #ffffff;
+  }
+
+  .ww-hero-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    text-align: right;
+    gap: 0.14rem;
+    padding-top: 0.05rem;
+    flex-shrink: 0;
+  }
+
+  .ww-hero-icon {
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-bottom: 0.08rem;
+  }
+
+  .ww-hero-icon :global(svg) {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .ww-condition {
+    font-size: 0.84rem;
+    font-weight: 500;
+    line-height: 1.15;
+    color: rgba(255, 255, 255, 0.94);
+  }
+
+  .ww-hl {
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    color: rgba(244, 248, 255, 0.84);
+  }
+
+  /* 6-Column Hourly Strip */
+  .ww-hourly-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    align-items: center;
+    gap: 0.25rem;
+    padding-top: 0.35rem;
+  }
+
+  .ww-hour-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.26rem;
+    text-align: center;
+  }
+
+  .ww-hour-time {
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: 0.01em;
+    color: rgba(238, 244, 255, 0.76);
+  }
+
+  .ww-hour-icon {
+    display: grid;
+    place-items: center;
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .ww-hour-icon :global(svg) {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .ww-hour-temp {
+    font-size: 0.86rem;
+    font-weight: 600;
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+    color: #ffffff;
+  }
+
+  .ww-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .weather-widget,
+    .ww-logo-link,
+    .ww-seg-pill,
+    .ww-tab {
+      transition: none;
+    }
+  }
+</style>

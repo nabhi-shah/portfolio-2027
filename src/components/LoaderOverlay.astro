@@ -1,0 +1,291 @@
+---
+import vectorSvgRaw from '../../Vector.svg?raw';
+
+const viewBoxMatch = vectorSvgRaw.match(/viewBox="([^"]+)"/);
+const pathMatch = vectorSvgRaw.match(/d="([^"]+)"/);
+const widthMatch = vectorSvgRaw.match(/stroke-width="([^"]+)"/);
+
+const viewBox = viewBoxMatch?.[1] ?? '0 0 1379 233';
+const rawD = pathMatch?.[1] ?? '';
+const strokeWidthNum = Number.parseFloat(widthMatch?.[1] ?? '13.64') || 13.64;
+
+// Reverse a single-subpath cubic Bezier (`M ... C ...`) so the exact curve draws left-to-right.
+function reverseCubicPath(d: string): string {
+  const tokens = d.match(/[MC]|[-+]?\d*\.?\d+(?:e[-+]?\d+)?/gi);
+  if (!tokens || tokens.length < 3) return d;
+
+  type Pt = [number, number];
+  const segs: Array<[Pt, Pt, Pt, Pt]> = [];
+  let cur: Pt = [0, 0];
+  let i = 0;
+
+  while (i < tokens.length) {
+    const tok = tokens[i];
+    if (tok === 'M') {
+      cur = [Number(tokens[i + 1]), Number(tokens[i + 2])];
+      i += 3;
+    } else if (tok === 'C') {
+      const p1: Pt = [Number(tokens[i + 1]), Number(tokens[i + 2])];
+      const p2: Pt = [Number(tokens[i + 3]), Number(tokens[i + 4])];
+      const p3: Pt = [Number(tokens[i + 5]), Number(tokens[i + 6])];
+      segs.push([cur, p1, p2, p3]);
+      cur = p3;
+      i += 7;
+    } else {
+      return d;
+    }
+  }
+
+  if (segs.length === 0) return d;
+  const lastEnd = segs[segs.length - 1]![3];
+  let out = `M${lastEnd[0]} ${lastEnd[1]}`;
+  for (let k = segs.length - 1; k >= 0; k--) {
+    const [p0, p1, p2] = segs[k]!;
+    out += `C${p2[0]} ${p2[1]} ${p1[0]} ${p1[1]} ${p0[0]} ${p0[1]}`;
+  }
+  return out;
+}
+
+const pathD = reverseCubicPath(rawD);
+const strokeWidth = String(strokeWidthNum);
+const bloomMidWidth = (strokeWidthNum * 1.35).toFixed(2);
+const bloomWideWidth = (strokeWidthNum * 2.15).toFixed(2);
+---
+
+<div id="loader-overlay" class="loader-overlay" role="status" aria-label="Loading">
+  <div class="loader-svg-stage">
+    <!-- Layer 1: 30% opacity static SVG without stroke animation -->
+    <svg
+      class="loader-svg loader-svg--base"
+      viewBox={viewBox}
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d={pathD}
+        stroke="white"
+        stroke-width={strokeWidth}
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+
+    <!-- Layer 2: 100% opacity animated SVG stroke + multi-stage HD optical bloom -->
+    <div class="loader-animated-group" aria-hidden="true">
+      <svg class="loader-svg loader-svg--bloom-wide" viewBox={viewBox} fill="none">
+        <path
+          class="loader-stroke-path"
+          pathLength="1000"
+          d={pathD}
+          stroke="#bfe4ff"
+          stroke-width={bloomWideWidth}
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+
+      <svg class="loader-svg loader-svg--bloom-mid" viewBox={viewBox} fill="none">
+        <path
+          class="loader-stroke-path"
+          pathLength="1000"
+          d={pathD}
+          stroke="#eef7ff"
+          stroke-width={bloomMidWidth}
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+
+      <svg class="loader-svg loader-svg--core" viewBox={viewBox} fill="none">
+        <path
+          id="loader-primary-path"
+          class="loader-stroke-path"
+          pathLength="1000"
+          d={pathD}
+          stroke="white"
+          stroke-width={strokeWidth}
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </div>
+  </div>
+</div>
+
+<script>
+  let supportsDisplayTransition: boolean | undefined;
+  function canTransitionDisplay(): boolean {
+    if (supportsDisplayTransition !== undefined) return supportsDisplayTransition;
+    if (!window.CSS?.supports?.('transition-behavior', 'allow-discrete') || !document.body) {
+      return false;
+    }
+    const probe = document.createElement('div');
+    probe.style.cssText = 'transition: display 1s allow-discrete !important; display: block;';
+    document.body.appendChild(probe);
+    getComputedStyle(probe).display;
+    probe.style.display = 'none';
+    supportsDisplayTransition = getComputedStyle(probe).display === 'block';
+    probe.remove();
+    return supportsDisplayTransition;
+  }
+
+  async function runLoaderSequence(): Promise<void> {
+    const overlay = document.getElementById('loader-overlay');
+    const primaryPath = document.getElementById('loader-primary-path');
+    if (!overlay) {
+      window.__loaderCompleted = true;
+      window.dispatchEvent(new CustomEvent('loader:complete'));
+      return;
+    }
+
+    // Wait two frames so CSS keyframe animations are guaranteed attached before inspecting getAnimations().
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    );
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const strokeAnims = !reducedMotion && primaryPath ? primaryPath.getAnimations() : [];
+    if (strokeAnims.length > 0) {
+      await Promise.race([
+        Promise.allSettled(strokeAnims.map((a) => a.finished)),
+        new Promise((r) => setTimeout(r, 3200))
+      ]);
+      // Brief pause at full HD bloom before fading away
+      await new Promise((r) => setTimeout(r, 180));
+    } else {
+      // Reduced motion (or animation skipped): show static mark briefly before clearing
+      await new Promise((r) => setTimeout(r, 260));
+    }
+
+    window.__loaderCompleted = true;
+    window.dispatchEvent(new CustomEvent('loader:complete'));
+
+    if (canTransitionDisplay()) {
+      overlay.hidden = true;
+    } else {
+      overlay.setAttribute('data-closing', '');
+    }
+
+    const exitAnims = overlay.getAnimations();
+    if (exitAnims.length > 0) {
+      await Promise.race([
+        Promise.allSettled(exitAnims.map((a) => a.finished)),
+        new Promise((r) => setTimeout(r, 2200))
+      ]);
+    }
+
+    if (overlay.hasAttribute('data-closing')) {
+      overlay.removeAttribute('data-closing');
+      overlay.hidden = true;
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => runLoaderSequence(), { once: true });
+  } else {
+    runLoaderSequence();
+  }
+</script>
+
+<style>
+  .loader-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100svh;
+    overflow: hidden;
+    opacity: 1;
+    pointer-events: auto;
+    user-select: none;
+    transition:
+      display 1.55s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 1.55s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-behavior: allow-discrete;
+  }
+
+  .loader-overlay:where([hidden], [data-closing]) {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .loader-overlay[hidden] {
+    display: none;
+  }
+
+  .loader-svg-stage {
+    position: relative;
+    flex: none;
+    /* Bleed well past both left and right viewport edges so both rounded stroke caps are clipped out */
+    width: 106vw;
+  }
+
+  .loader-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  /* Layer 1: 30% opacity static base SVG */
+  .loader-svg--base {
+    opacity: 0.3;
+  }
+
+  /* Layer 2: 100% opacity animated stroke + multi-pass HD bloom */
+  .loader-animated-group {
+    position: absolute;
+    inset: 0;
+    opacity: 1;
+  }
+
+  .loader-svg--bloom-wide,
+  .loader-svg--bloom-mid,
+  .loader-svg--core {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .loader-svg--bloom-wide {
+    opacity: 0.54;
+    filter: blur(clamp(16px, 2.2vw, 36px));
+  }
+
+  .loader-svg--bloom-mid {
+    opacity: 0.82;
+    filter: blur(clamp(6px, 0.85vw, 14px));
+  }
+
+  .loader-svg--core {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px rgba(220, 244, 255, 0.9));
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .loader-stroke-path {
+      stroke-dasharray: 1010 1100;
+      stroke-dashoffset: 1025;
+      animation: loaderStrokeDraw 2.25s cubic-bezier(0.37, 0, 0.22, 1) 0.12s forwards;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .loader-overlay {
+      transition-duration: 0.25s;
+    }
+  }
+
+  @keyframes loaderStrokeDraw {
+    from {
+      stroke-dashoffset: 1025;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+</style>

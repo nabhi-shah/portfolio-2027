@@ -1,18 +1,90 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import ShaderCanvas from '@/components/ShaderCanvas.astro';
+import LoaderOverlay from '@/components/LoaderOverlay.astro';
+import WeatherWidget from '@/components/WeatherWidget.astro';
 ---
 
 <BaseLayout title="Atmospheric Weather Shader Sandbox">
   <ShaderCanvas />
+  <LoaderOverlay />
+  <WeatherWidget />
 
-  <aside class="sandbox-panel" id="sandbox-panel" aria-label="Weather & Atmosphere Shader Controls">
+  <section class="deck-overlay" id="deck-overlay" aria-label="Workspace Card Stack" aria-hidden="true">
+    <div class="deck-floor" aria-hidden="true"></div>
+
+    <div class="deck-stage" id="deck-stage">
+      <div class="deck-card-unit" data-card-index="0" data-size="desktop" data-theme="slate" role="button" tabindex="-1" aria-label="Card 1">
+        <div class="deck-card"></div>
+        <div class="deck-card-reflection" aria-hidden="true">
+          <div class="deck-card-reflection-inner"></div>
+        </div>
+      </div>
+
+      <div class="deck-card-unit" data-card-index="1" data-size="mobile" data-theme="graphite" role="button" tabindex="-1" aria-label="Card 2">
+        <div class="deck-card"></div>
+        <div class="deck-card-reflection" aria-hidden="true">
+          <div class="deck-card-reflection-inner"></div>
+        </div>
+      </div>
+
+      <div class="deck-card-unit" data-card-index="2" data-size="desktop" data-theme="studio" role="button" tabindex="-1" aria-label="Card 3">
+        <div class="deck-card"></div>
+        <div class="deck-card-reflection" aria-hidden="true">
+          <div class="deck-card-reflection-inner"></div>
+        </div>
+      </div>
+
+      <div class="deck-card-unit" data-card-index="3" data-size="mobile" data-theme="obsidian" role="button" tabindex="-1" aria-label="Card 4">
+        <div class="deck-card"></div>
+        <div class="deck-card-reflection" aria-hidden="true">
+          <div class="deck-card-reflection-inner"></div>
+        </div>
+      </div>
+
+      <div class="deck-card-unit" data-card-index="4" data-size="desktop" data-theme="midnight" role="button" tabindex="-1" aria-label="Card 5">
+        <div class="deck-card"></div>
+        <div class="deck-card-reflection" aria-hidden="true">
+          <div class="deck-card-reflection-inner"></div>
+        </div>
+      </div>
+
+      <div class="deck-card-unit" data-card-index="5" data-size="desktop" data-theme="carbon" role="button" tabindex="-1" aria-label="Card 6">
+        <div class="deck-card"></div>
+        <div class="deck-card-reflection" aria-hidden="true">
+          <div class="deck-card-reflection-inner"></div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="deck-scroller"
+      id="deck-scroller"
+      role="slider"
+      aria-label="Card Scroller"
+      aria-valuemin="1"
+      aria-valuemax="6"
+      aria-valuenow="1"
+      tabindex="0"
+    >
+      <div class="deck-scroller-track" id="deck-scroller-track">
+        <div class="deck-scroller-thumb" id="deck-scroller-thumb"></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="sandbox-panel" id="sandbox-panel" inert aria-hidden="true" aria-label="Weather & Atmosphere Shader Controls">
     <header class="panel-header">
       <div class="panel-title-wrap">
         <span class="status-dot"></span>
         <h1 class="panel-title">Weather Shader Controls</h1>
       </div>
-      <button type="button" class="collapse-btn" id="toggle-panel-btn" title="Collapse / Expand Controls">
+      <button
+        type="button"
+        class="collapse-btn"
+        id="toggle-panel-btn"
+        title="Hide Weather Controls (Cmd+Shift+W / Option+Shift+W / Esc)"
+      >
         Hide UI
       </button>
     </header>
@@ -94,8 +166,8 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
 
           <label class="slider-row">
             <span class="slider-name">Cloud Cover</span>
-            <input type="range" min="0" max="1" step="0.01" value="0.24" data-param="cloudCover" />
-            <span class="slider-val" data-val="cloudCover">24%</span>
+            <input type="range" min="0" max="1" step="0.01" value="0" data-param="cloudCover" />
+            <span class="slider-val" data-val="cloudCover">0%</span>
           </label>
 
           <label class="slider-row">
@@ -172,6 +244,7 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
 <script>
   import {
     HOST_LOCATION,
+    computeSunPosition,
     detectVisitorLocation,
     fetchWeatherForLocation
   } from '@/services/weatherService';
@@ -181,9 +254,17 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
   } from '@/webgl/ShaderStage';
   import type { WeatherState } from '@/config/weather';
 
-  let currentTarget: ShaderWeatherTarget = { ...DEFAULT_SHADER_TARGET };
-  let activeTimeName = 'Afternoon';
-  let activeWeatherName = 'Sunny';
+  const nowLocal = new Date();
+  const initialSolar = computeSunPosition(nowLocal.getHours() + nowLocal.getMinutes() / 60);
+  let currentTarget: ShaderWeatherTarget = {
+    ...DEFAULT_SHADER_TARGET,
+    sunElevation: initialSolar.sunElevation,
+    sunAzimuth: Math.max(0.08, Math.min(0.92, initialSolar.sunAzimuth)),
+    godRays: initialSolar.sunElevation > 0 ? 1.05 : 0
+  };
+  let activeTimeName = 'Detecting sky…';
+  let activeWeatherName = 'Loading live weather';
+  let hasManualShaderOverride = false;
   let hostState: WeatherState | null = null;
   let visitorState: WeatherState | null = null;
 
@@ -197,7 +278,7 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
     afternoon: { label: 'Afternoon', sunElevation: 0.85, sunAzimuth: 0.11, godRays: 1.05 },
     dusk: { label: 'Dusk', sunElevation: 0.08, sunAzimuth: 0.82, godRays: 1.35 },
     evening: { label: 'Evening', sunElevation: -0.18, sunAzimuth: 0.78, godRays: 0.45 },
-    night: { label: 'Night', sunElevation: -0.75, sunAzimuth: 0.22, godRays: 0.3 }
+    night: { label: 'Night', sunElevation: -0.75, sunAzimuth: 0.22, godRays: 0 }
   };
 
   // 14 Weather Pattern Profiles
@@ -208,7 +289,7 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
     sunny: {
       label: 'Sunny',
       params: {
-        cloudCover: 0.22,
+        cloudCover: 0,
         cloudDensity: 1.0,
         godRays: 1.1,
         fog: 0,
@@ -417,9 +498,9 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
       label: 'Aurora Sky',
       params: {
         sunElevation: -0.78,
-        cloudCover: 0.18,
+        cloudCover: 0,
         cloudDensity: 0.85,
-        godRays: 0.25,
+        godRays: 0,
         fog: 0,
         dust: 0,
         rain: 0,
@@ -432,6 +513,23 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
     }
   };
 
+  const sliderControls = new Map<
+    keyof ShaderWeatherTarget,
+    { input: HTMLInputElement; label: HTMLElement | null }
+  >();
+  document.querySelectorAll<HTMLInputElement>('input[data-param]').forEach((input) => {
+    const key = input.getAttribute('data-param') as keyof ShaderWeatherTarget | null;
+    if (!key) return;
+    const label = document.querySelector<HTMLElement>(`[data-val="${key}"]`);
+    sliderControls.set(key, { input, label });
+  });
+  const liveStatusEl = document.getElementById('live-status-text');
+  const timeButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-time]'));
+  const weatherButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-weather]'));
+  const liveButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('#btn-live-host, #btn-live-visitor')
+  );
+
   const formatSliderVal = (key: keyof ShaderWeatherTarget, val: number): string => {
     if (key === 'sunElevation' || key === 'sunAzimuth') return val.toFixed(2);
     if (key === 'windSpeed') return `${val.toFixed(1)}x`;
@@ -439,37 +537,232 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
   };
 
   const syncSlidersFromState = () => {
-    (Object.keys(currentTarget) as Array<keyof ShaderWeatherTarget>).forEach((key) => {
-      const input = document.querySelector<HTMLInputElement>(`input[data-param="${key}"]`);
-      const label = document.querySelector<HTMLElement>(`[data-val="${key}"]`);
+    sliderControls.forEach(({ input, label }, key) => {
       const val = currentTarget[key];
-      if (input) input.value = String(val);
+      input.value = String(val);
       if (label) label.textContent = formatSliderVal(key, val);
     });
 
-    const statusEl = document.getElementById('live-status-text');
-    if (statusEl) {
-      statusEl.textContent = `${activeTimeName} · ${activeWeatherName}`;
+    if (liveStatusEl) {
+      liveStatusEl.textContent = `${activeTimeName} · ${activeWeatherName}`;
+    }
+  };
+
+  // ---------------------------------------------------------
+  // Weather Widget Lighting, Data Rendering & Accessible Tabs
+  // ---------------------------------------------------------
+  const weatherWidget = document.getElementById('weather-widget');
+  const wwSunStrokeGrad = document.getElementById('ww-sun-stroke-grad');
+  const wwTileStrokeGrad = document.getElementById('ww-tile-stroke-grad');
+  const wwTablist = document.querySelector<HTMLElement>('.ww-tablist');
+  const wwTabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.ww-tab'));
+  const wwPanels: Record<'you' | 'me', HTMLElement | null> = {
+    you: document.getElementById('ww-panel-you'),
+    me: document.getElementById('ww-panel-me')
+  };
+  let activeWidgetTab: 'you' | 'me' = 'you';
+
+  const formatHourChip = (raw: string): string => {
+    if (!raw || raw.toLowerCase() === 'now') return 'Now';
+    const match = raw.match(/^(\d{1,2})/);
+    if (!match) return raw;
+    const h24 = Number(match[1]) % 24;
+    const period = h24 >= 12 ? 'PM' : 'AM';
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    return `${h12}${period}`;
+  };
+
+  const isHourDaylight = (raw: string, fallbackDay: boolean): boolean => {
+    if (!raw || raw.toLowerCase() === 'now') return fallbackDay;
+    const match = raw.match(/^(\d{1,2})/);
+    if (!match) return fallbackDay;
+    const h24 = Number(match[1]) % 24;
+    return h24 >= 6 && h24 < 19;
+  };
+
+  const getWeatherIconSvg = (code: number, isDay: boolean): string => {
+    // Minimal clean Apple-Weather-inspired glyphs
+    const cloudPath =
+      '<path d="M6.8 18h10.7a3.5 3.5 0 0 0 .35-6.98A4.8 4.8 0 0 0 8.5 9.2 4.2 4.2 0 0 0 6.8 18Z" fill="#ffffff" fill-opacity="0.95"/>';
+    if (code >= 95) {
+      // Storm
+      return `<svg viewBox="0 0 24 24" fill="none">${cloudPath}<path d="M12.6 17.5 10.7 21h2.1l-.8 2.5 3.1-3.8h-2.1l.9-2.2Z" fill="#ffd65a"/></svg>`;
+    }
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) {
+      // Snow
+      return `<svg viewBox="0 0 24 24" fill="none">${cloudPath}<circle cx="9" cy="20.4" r="1" fill="#e6f2ff"/><circle cx="12.5" cy="21.4" r="1" fill="#e6f2ff"/><circle cx="16" cy="20.4" r="1" fill="#e6f2ff"/></svg>`;
+    }
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
+      // Rain
+      return `<svg viewBox="0 0 24 24" fill="none">${cloudPath}<path d="M9.2 19.6 8.3 22M12.6 19.6 11.7 22M16 19.6 15.1 22" stroke="#7bc8ff" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    }
+    if (code === 45 || code === 48) {
+      // Fog
+      return '<svg viewBox="0 0 24 24" fill="none"><path d="M5 10.5h14M4 14h16M6.5 17.5h11" stroke="#eef4ff" stroke-opacity="0.88" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    }
+    if (code === 2) {
+      // Partly Cloudy
+      const sunOrb = isDay
+        ? '<circle cx="15.8" cy="8.2" r="3.4" fill="#ffd452"/><path d="M15.8 3.2v1.3M15.8 11.9v1.3M20.8 8.2h-1.3M19.3 4.7l-.9.9M19.3 11.7l-.9-.9" stroke="#ffd452" stroke-width="1.3" stroke-linecap="round"/>'
+        : '<path d="M16.8 5.2a3.3 3.3 0 1 0 3.7 4.7 3.8 3.8 0 0 1-3.7-4.7Z" fill="#dce7ff"/>';
+      return `<svg viewBox="0 0 24 24" fill="none">${sunOrb}<path d="M6 18.5h9.6a3.1 3.1 0 0 0 .3-6.18 4.3 4.3 0 0 0-8.4-1.6A3.75 3.75 0 0 0 6 18.5Z" fill="#ffffff" fill-opacity="0.96"/></svg>`;
+    }
+    if (code === 3) {
+      // Overcast / Cloudy
+      return `<svg viewBox="0 0 24 24" fill="none">${cloudPath}</svg>`;
+    }
+    // Clear / Mostly clear
+    if (!isDay) {
+      return '<svg viewBox="0 0 24 24" fill="none"><path d="M15.2 4.6a6.8 6.8 0 1 0 5.9 10.2 6 6 0 0 1-5.9-10.2Z" fill="#e6efff"/></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.5" fill="#ffd54f"/><path d="M12 3.2v2.1M12 18.7v2.1M3.2 12h2.1M18.7 12h2.1M5.8 5.8l1.5 1.5M16.7 16.7l1.5 1.5M18.2 5.8l-1.5 1.5M7.3 16.7l-1.5 1.5" stroke="#ffd54f" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  };
+
+  const updateWidgetLighting = (target: ShaderWeatherTarget) => {
+    if (!weatherWidget) return;
+    const vw = window.innerWidth || 1280;
+    const vh = window.innerHeight || 800;
+    const sunU = Math.min(0.95, Math.max(0.05, target.sunAzimuth));
+    const sunUvY = 0.26 + Math.max(0, Math.min(1, target.sunElevation)) * (0.88 - 0.26);
+    const sunScreenX = sunU * vw;
+    const sunScreenY = (1 - sunUvY) * vh;
+
+    const rect = weatherWidget.getBoundingClientRect();
+    const cx = rect.width > 0 ? rect.left + rect.width * 0.5 : vw * 0.5;
+    const cy = rect.height > 0 ? rect.top + rect.height * 0.5 : vh * 0.5;
+    const dx = sunScreenX - cx;
+    const dy = sunScreenY - cy;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ux = dx / dist;
+    const uy = dy / dist;
+
+    // Gradient angle where 0% stop sits ON the face closest to the sun
+    const rimDeg = (Math.atan2(-ux, uy) * 180) / Math.PI;
+    const hitX = Math.round(50 + ux * 46);
+    const hitY = Math.round(50 + uy * 46);
+
+    const dayFactor = Math.max(0, Math.min(1, (target.sunElevation + 0.08) / 0.36));
+    const goldenPeak = Math.max(0, 1 - Math.abs(target.sunElevation - 0.22) / 0.38);
+    const cloudDamp = 1 - Math.min(0.62, target.cloudCover * 0.42 + target.storm * 0.45);
+    const bloomStrength =
+      dayFactor > 0.06
+        ? (0.38 + 0.5 * Math.min(1.4, target.bloomStrength)) * cloudDamp * (0.45 + 0.55 * dayFactor)
+        : 0.24 + 0.22 * Math.min(1, target.aurora);
+
+    let glowRgb = '255, 214, 122';
+    let peakColor = '#ffe5a3';
+    let midColor = '#ffd07b';
+    if (dayFactor <= 0.06) {
+      glowRgb = target.aurora > 0.3 ? '138, 240, 206' : '168, 204, 255';
+      peakColor = target.aurora > 0.3 ? '#9ff7de' : '#cfe2ff';
+      midColor = target.aurora > 0.3 ? '#68d4ba' : '#8eb3eb';
+    } else if (goldenPeak > 0.45) {
+      glowRgb = '255, 196, 88';
+      peakColor = '#ffe094';
+      midColor = '#ffb752';
+    }
+
+    weatherWidget.style.setProperty('--sun-hit-x', `${hitX}%`);
+    weatherWidget.style.setProperty('--sun-hit-y', `${hitY}%`);
+    weatherWidget.style.setProperty('--sun-rim-deg', `${rimDeg.toFixed(1)}deg`);
+    weatherWidget.style.setProperty('--sun-bloom', bloomStrength.toFixed(3));
+    weatherWidget.style.setProperty('--ww-glow-rgb', glowRgb);
+    weatherWidget.style.setProperty('--ww-shadow-x', `${(-ux * 9).toFixed(1)}px`);
+    weatherWidget.style.setProperty('--ww-shadow-y', `${Math.max(4, -uy * 9 + 8).toFixed(1)}px`);
+
+    if (wwSunStrokeGrad) {
+      wwSunStrokeGrad.setAttribute('x1', (184 + ux * 195).toFixed(1));
+      wwSunStrokeGrad.setAttribute('y1', (126 + uy * 136).toFixed(1));
+      wwSunStrokeGrad.setAttribute('x2', (184 - ux * 195).toFixed(1));
+      wwSunStrokeGrad.setAttribute('y2', (126 - uy * 136).toFixed(1));
+      const stops = wwSunStrokeGrad.querySelectorAll('stop');
+      if (stops[0]) {
+        stops[0].setAttribute('stop-color', peakColor);
+        stops[0].setAttribute('stop-opacity', (0.32 + bloomStrength * 0.34).toFixed(2));
+      }
+      if (stops[1]) {
+        stops[1].setAttribute('stop-color', midColor);
+        stops[1].setAttribute('stop-opacity', (0.12 + bloomStrength * 0.2).toFixed(2));
+      }
+    }
+
+    if (wwTileStrokeGrad) {
+      wwTileStrokeGrad.setAttribute('x1', (27 + ux * 30).toFixed(1));
+      wwTileStrokeGrad.setAttribute('y1', (27 + uy * 30).toFixed(1));
+      wwTileStrokeGrad.setAttribute('x2', (27 - ux * 30).toFixed(1));
+      wwTileStrokeGrad.setAttribute('y2', (27 - uy * 30).toFixed(1));
+      const stops = wwTileStrokeGrad.querySelectorAll('stop');
+      if (stops[0]) {
+        stops[0].setAttribute('stop-color', peakColor);
+        stops[0].setAttribute('stop-opacity', (0.34 + bloomStrength * 0.34).toFixed(2));
+      }
+      if (stops[1]) {
+        stops[1].setAttribute('stop-color', midColor);
+        stops[1].setAttribute('stop-opacity', (0.14 + bloomStrength * 0.18).toFixed(2));
+      }
+    }
+  };
+
+  const renderWeatherWidgetPanel = (tabKey: 'you' | 'me', state: WeatherState) => {
+    const panelEl = wwPanels[tabKey];
+    if (!panelEl) return;
+
+    const cityEl = panelEl.querySelector<HTMLElement>('[data-field="city"]');
+    const tempEl = panelEl.querySelector<HTMLElement>('[data-field="temp"]');
+    const heroIconEl = panelEl.querySelector<HTMLElement>('[data-field="heroIcon"]');
+    const condEl = panelEl.querySelector<HTMLElement>('[data-field="condition"]');
+    const hlEl = panelEl.querySelector<HTMLElement>('[data-field="hl"]');
+    const hourlyGridEl = panelEl.querySelector<HTMLElement>('[data-field="hourlyGrid"]');
+    const tableBodyEl = panelEl.querySelector<HTMLElement>('[data-field="hourlyTable"] tbody');
+
+    if (cityEl) cityEl.textContent = state.location.city;
+    if (tempEl) tempEl.textContent = `${state.temperature}°`;
+    if (heroIconEl) heroIconEl.innerHTML = getWeatherIconSvg(state.weatherCode, state.isDay);
+    if (condEl) condEl.textContent = state.conditionLabel;
+    if (hlEl) hlEl.textContent = `H:${state.tempMax}° L:${state.tempMin}°`;
+
+    const hourly =
+      state.hourly.length > 0
+        ? state.hourly.slice(0, 6)
+        : [{ time: 'Now', temp: state.temperature, humidity: state.humidity, code: state.weatherCode }];
+
+    if (hourlyGridEl) {
+      const cols = Array.from(hourlyGridEl.querySelectorAll<HTMLElement>('.ww-hour-col'));
+      cols.forEach((col, i) => {
+        const pt = hourly[i] ?? hourly[hourly.length - 1];
+        const tEl = col.querySelector<HTMLElement>('.ww-hour-time');
+        const icEl = col.querySelector<HTMLElement>('.ww-hour-icon');
+        const tmpEl = col.querySelector<HTMLElement>('.ww-hour-temp');
+        if (tEl) tEl.textContent = formatHourChip(pt.time);
+        if (icEl) icEl.innerHTML = getWeatherIconSvg(pt.code, isHourDaylight(pt.time, state.isDay));
+        if (tmpEl) tmpEl.textContent = `${pt.temp}°`;
+      });
+    }
+
+    if (tableBodyEl) {
+      tableBodyEl.innerHTML = hourly
+        .map((pt) => `<tr><td>${formatHourChip(pt.time)}</td><td>${pt.temp}°</td></tr>`)
+        .join('');
     }
   };
 
   const pushToShader = () => {
     syncSlidersFromState();
+    updateWidgetLighting(currentTarget);
     window.dispatchEvent(new CustomEvent('weather:preset', { detail: { ...currentTarget } }));
   };
 
   // Time preset clicks
-  document.querySelectorAll<HTMLButtonElement>('[data-time]').forEach((btn) => {
+  timeButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       const key = btn.getAttribute('data-time') || 'afternoon';
       const t = TIME_PRESETS[key];
       if (!t) return;
 
-      document.querySelectorAll('[data-time]').forEach((b) => b.classList.remove('is-active'));
+      hasManualShaderOverride = true;
+      timeButtons.forEach((b) => b.classList.remove('is-active'));
       btn.classList.add('is-active');
-      document
-        .querySelectorAll('#btn-live-host, #btn-live-visitor')
-        .forEach((b) => b.classList.remove('is-active'));
+      liveButtons.forEach((b) => b.classList.remove('is-active'));
 
       activeTimeName = t.label;
       currentTarget.sunElevation = t.sunElevation;
@@ -483,17 +776,16 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
   });
 
   // Weather pattern clicks
-  document.querySelectorAll<HTMLButtonElement>('[data-weather]').forEach((btn) => {
+  weatherButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       const key = btn.getAttribute('data-weather') || 'sunny';
       const w = WEATHER_PRESETS[key];
       if (!w) return;
 
-      document.querySelectorAll('[data-weather]').forEach((b) => b.classList.remove('is-active'));
+      hasManualShaderOverride = true;
+      weatherButtons.forEach((b) => b.classList.remove('is-active'));
       btn.classList.add('is-active');
-      document
-        .querySelectorAll('#btn-live-host, #btn-live-visitor')
-        .forEach((b) => b.classList.remove('is-active'));
+      liveButtons.forEach((b) => b.classList.remove('is-active'));
 
       activeWeatherName = w.label;
       currentTarget = {
@@ -504,7 +796,7 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
       // If Aurora is picked during daytime, switch time to Night so it shines clearly
       if (key === 'aurora') {
         activeTimeName = 'Night';
-        document.querySelectorAll('[data-time]').forEach((b) => {
+        timeButtons.forEach((b) => {
           b.classList.toggle('is-active', b.getAttribute('data-time') === 'night');
         });
       }
@@ -513,56 +805,86 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
   });
 
   // Individual slider adjustments
-  document.querySelectorAll<HTMLInputElement>('input[data-param]').forEach((input) => {
+  sliderControls.forEach(({ input, label }, key) => {
     input.addEventListener('input', () => {
-      const key = input.getAttribute('data-param') as keyof ShaderWeatherTarget;
+      hasManualShaderOverride = true;
       const val = parseFloat(input.value);
       currentTarget[key] = val;
 
-      const label = document.querySelector<HTMLElement>(`[data-val="${key}"]`);
       if (label) label.textContent = formatSliderVal(key, val);
 
+      updateWidgetLighting(currentTarget);
       window.dispatchEvent(new CustomEvent('weather:preset', { detail: { ...currentTarget } }));
     });
   });
 
   // Reset button
   document.getElementById('reset-params-btn')?.addEventListener('click', () => {
+    hasManualShaderOverride = true;
     currentTarget = { ...DEFAULT_SHADER_TARGET };
     activeTimeName = 'Afternoon';
     activeWeatherName = 'Sunny';
-    document.querySelectorAll('[data-time]').forEach((b) => {
+    timeButtons.forEach((b) => {
       b.classList.toggle('is-active', b.getAttribute('data-time') === 'afternoon');
     });
-    document.querySelectorAll('[data-weather]').forEach((b) => {
+    weatherButtons.forEach((b) => {
       b.classList.toggle('is-active', b.getAttribute('data-weather') === 'sunny');
     });
     pushToShader();
   });
 
-  // Collapse / Expand Panel button
+  // Weather Shader Controls visibility (hidden by default; toggled via shortcut)
   const panel = document.getElementById('sandbox-panel');
   const toggleBtn = document.getElementById('toggle-panel-btn');
-  toggleBtn?.addEventListener('click', () => {
-    const collapsed = panel?.classList.toggle('is-collapsed');
-    if (toggleBtn) toggleBtn.textContent = collapsed ? 'Show Controls' : 'Hide UI';
+  let isControlsOpen = false;
+
+  const setControlsVisible = (open: boolean) => {
+    isControlsOpen = open;
+    if (!panel) return;
+    panel.classList.toggle('is-open', open);
+    panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (open) {
+      panel.removeAttribute('inert');
+      requestAnimationFrame(() => toggleBtn?.focus());
+    } else {
+      if (panel.contains(document.activeElement)) {
+        (document.activeElement as HTMLElement)?.blur();
+      }
+      panel.setAttribute('inert', '');
+    }
+  };
+
+  toggleBtn?.addEventListener('click', () => setControlsVisible(false));
+
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (!window.__loaderCompleted) return;
+    if (e.shiftKey && e.code === 'KeyW' && (e.metaKey || e.ctrlKey || e.altKey)) {
+      e.preventDefault();
+      setControlsVisible(!isControlsOpen);
+      return;
+    }
+    if (e.key === 'Escape' && isControlsOpen) {
+      e.preventDefault();
+      setControlsVisible(false);
+    }
   });
 
-  // Live Location buttons (Nabhi vs Visitor)
+  // Live Location buttons (Nabhi vs Visitor) + Weather Widget Tabs sync
   const applyLiveWeatherState = (state: WeatherState, sourceBtnId: string) => {
-    document
-      .querySelectorAll('[data-time], [data-weather], #btn-live-host, #btn-live-visitor')
-      .forEach((b) => b.classList.remove('is-active'));
+    hasManualShaderOverride = false;
+    timeButtons.forEach((b) => b.classList.remove('is-active'));
+    weatherButtons.forEach((b) => b.classList.remove('is-active'));
+    liveButtons.forEach((b) => b.classList.remove('is-active'));
     document.getElementById(sourceBtnId)?.classList.add('is-active');
 
     const isFog = state.weatherCode === 45 || state.weatherCode === 48;
     currentTarget = {
       ...currentTarget,
       sunElevation: state.sunElevation,
-      sunAzimuth: 0.12,
+      sunAzimuth: Math.max(0.08, Math.min(0.92, state.sunAzimuth)),
       cloudCover: state.cloudCover,
       cloudDensity: 1.05,
-      godRays: state.isDay ? 1.05 : 0.35,
+      godRays: state.isDay ? 1.05 : 0,
       fog: isFog ? 0.7 : 0,
       dust: 0,
       rain: state.precipitation,
@@ -577,19 +899,76 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
     pushToShader();
   };
 
+  const selectWeatherTab = (nextTab: 'you' | 'me', focusTab = false) => {
+    hasManualShaderOverride = false;
+    activeWidgetTab = nextTab;
+    if (wwTablist) {
+      wwTablist.setAttribute('data-active-idx', nextTab === 'me' ? '1' : '0');
+    }
+    wwTabs.forEach((btn) => {
+      const isSelected = btn.dataset.tab === nextTab;
+      btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      btn.tabIndex = isSelected ? 0 : -1;
+      if (isSelected && focusTab) btn.focus();
+    });
+    (Object.keys(wwPanels) as Array<'you' | 'me'>).forEach((k) => {
+      const pEl = wwPanels[k];
+      if (!pEl) return;
+      if (k === nextTab) {
+        pEl.removeAttribute('hidden');
+      } else {
+        pEl.setAttribute('hidden', '');
+      }
+    });
+
+    const targetState = nextTab === 'me' ? hostState : visitorState;
+    if (targetState) {
+      renderWeatherWidgetPanel(nextTab, targetState);
+      applyLiveWeatherState(targetState, nextTab === 'me' ? 'btn-live-host' : 'btn-live-visitor');
+    }
+  };
+
+  wwTabs.forEach((btn, idx) => {
+    btn.addEventListener('click', () => {
+      const tabId = btn.dataset.tab === 'me' ? 'me' : 'you';
+      selectWeatherTab(tabId);
+    });
+    btn.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextBtn = wwTabs[(idx + 1) % wwTabs.length];
+        selectWeatherTab(nextBtn.dataset.tab === 'me' ? 'me' : 'you', true);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevBtn = wwTabs[(idx - 1 + wwTabs.length) % wwTabs.length];
+        selectWeatherTab(prevBtn.dataset.tab === 'me' ? 'me' : 'you', true);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        selectWeatherTab('you', true);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        selectWeatherTab('me', true);
+      }
+    });
+  });
+
   document.getElementById('btn-live-host')?.addEventListener('click', () => {
-    if (hostState) applyLiveWeatherState(hostState, 'btn-live-host');
+    if (hostState) selectWeatherTab('me');
   });
 
   document.getElementById('btn-live-visitor')?.addEventListener('click', () => {
-    if (visitorState) applyLiveWeatherState(visitorState, 'btn-live-visitor');
+    if (visitorState) selectWeatherTab('you');
   });
 
-  // Fetch both live locations in background so the buttons show live city & temp
+  // Fetch both live locations in background so both tabs, widget, & initial sky sync immediately
   fetchWeatherForLocation(HOST_LOCATION).then((state) => {
     hostState = state;
     const el = document.getElementById('host-mini-label');
     if (el) el.textContent = `${state.location.city} ${state.temperature}°`;
+    renderWeatherWidgetPanel('me', state);
+    if (activeWidgetTab === 'me' && !hasManualShaderOverride) {
+      applyLiveWeatherState(state, 'btn-live-host');
+    }
   });
 
   detectVisitorLocation()
@@ -598,40 +977,835 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
       visitorState = state;
       const el = document.getElementById('visitor-mini-label');
       if (el) el.textContent = `${state.location.city} ${state.temperature}°`;
+      renderWeatherWidgetPanel('you', state);
+      if (activeWidgetTab === 'you' && !hasManualShaderOverride) {
+        applyLiveWeatherState(state, 'btn-live-visitor');
+      }
     });
 
-  // Start in Sunny Afternoon default so user immediately sees clouds + sun rays + bloom
+  // Seed initial shader lighting with local solar estimate until live visitor telemetry lands
   pushToShader();
+  window.addEventListener('resize', () => updateWidgetLighting(currentTarget), { passive: true });
+
+  // ---------------------------------------------------------
+  // Distance-Mapped Gesture + 3D Card Carousel + Scroller
+  // ---------------------------------------------------------
+  const webglStage = document.getElementById('webgl-stage');
+  const deckOverlay = document.getElementById('deck-overlay');
+  const deckScroller = document.getElementById('deck-scroller');
+  const deckScrollerTrack = document.getElementById('deck-scroller-track');
+  const deckScrollerThumb = document.getElementById('deck-scroller-thumb');
+  const sandboxPanel = document.getElementById('sandbox-panel');
+
+  const revealSandboxPanel = () => {
+    if (weatherWidget) {
+      weatherWidget.classList.add('is-revealed');
+      weatherWidget.removeAttribute('inert');
+      requestAnimationFrame(() => updateWidgetLighting(currentTarget));
+    }
+  };
+
+  if (window.__loaderCompleted) {
+    revealSandboxPanel();
+  } else {
+    window.addEventListener('loader:complete', revealSandboxPanel, { once: true });
+  }
+  const cardUnits = Array.from(document.querySelectorAll<HTMLElement>('.deck-card-unit'));
+  const CARD_COUNT = cardUnits.length;
+  const getPixelsPerCard = (): number => Math.max(160, Math.min(320, window.innerWidth * 0.25));
+
+  let isDeckOpen = false;
+  let accumDelta = 0;
+  let closeAccum = 0;
+  let rawOverScroll = 0;
+  let overScroll = 0;
+  let openBurstUntil = 0;
+  let closeCooldownUntil = 0;
+  let overScrollResetTimer: number | undefined;
+  let accumResetTimer: number | undefined;
+  let closeResetTimer: number | undefined;
+
+  let springProgress = 0;
+  let springVelocity = 0;
+
+  // Continuous 3D carousel state
+  let currentIndex = 0;
+  let targetIndex = 0;
+  let carouselVelocity = 0;
+  let isSwipingHoriz = false;
+  let swipeStartIndex = 0;
+  let swipeDistPx = 0;
+  let horizEndTimer: number | undefined;
+  let lastFrameTime = performance.now();
+  let deckRafId = 0;
+
+  const scheduleDeckTick = () => {
+    if (deckRafId) return;
+    lastFrameTime = performance.now();
+    deckRafId = requestAnimationFrame(tickDeckPhysics);
+  };
+
+  const setDeckOpen = (open: boolean) => {
+    isDeckOpen = open;
+    accumDelta = 0;
+    closeAccum = 0;
+    rawOverScroll = 0;
+    if (open) {
+      openBurstUntil = performance.now() + 220;
+      deckOverlay?.classList.add('is-open');
+      deckOverlay?.setAttribute('aria-hidden', 'false');
+    } else {
+      closeCooldownUntil = performance.now() + 320;
+      deckOverlay?.classList.remove('is-open');
+      deckOverlay?.setAttribute('aria-hidden', 'true');
+    }
+    scheduleDeckTick();
+  };
+
+  // Strictly one-way: upwardDelta > 0 opens & resists; upwardDelta < 0 only closes when open
+  const handleVerticalDelta = (upwardDelta: number) => {
+    const now = performance.now();
+    if (!isDeckOpen) {
+      if (now < closeCooldownUntil) return;
+      if (upwardDelta <= 0) {
+        accumDelta = Math.max(0, accumDelta + upwardDelta);
+        return;
+      }
+
+      accumDelta += upwardDelta;
+      window.clearTimeout(accumResetTimer);
+      accumResetTimer = window.setTimeout(() => {
+        accumDelta = 0;
+      }, 150);
+
+      // Distance-mapped pre-pull before latching open
+      springProgress = Math.max(springProgress, Math.min(0.45, accumDelta / 140));
+      scheduleDeckTick();
+
+      if (accumDelta >= 24) {
+        setDeckOpen(true);
+      }
+      return;
+    }
+
+    if (upwardDelta > 0) {
+      closeAccum = 0;
+      // Subsequent upward scroll hits elastic resistance
+      rawOverScroll = Math.min(900, rawOverScroll + upwardDelta);
+      window.clearTimeout(overScrollResetTimer);
+      overScrollResetTimer = window.setTimeout(() => {
+        rawOverScroll = 0;
+        scheduleDeckTick();
+      }, 100);
+      scheduleDeckTick();
+    } else if (upwardDelta < 0) {
+      // Never resist in the opposite (downward) direction
+      rawOverScroll = 0;
+      if (now > openBurstUntil) {
+        closeAccum += Math.abs(upwardDelta);
+        window.clearTimeout(closeResetTimer);
+        closeResetTimer = window.setTimeout(() => {
+          closeAccum = 0;
+        }, 220);
+
+        springProgress = Math.max(0.65, 1 - Math.min(0.35, closeAccum / 140));
+        scheduleDeckTick();
+        if (closeAccum >= 14) {
+          setDeckOpen(false);
+        }
+      }
+    }
+  };
+
+  const finishHorizontalSwipe = () => {
+    if (!isSwipingHoriz) return;
+    const rawCards = swipeDistPx / getPixelsPerCard();
+    if (Math.abs(rawCards) >= 0.12) {
+      const steps = Math.max(1, Math.round(Math.abs(rawCards)));
+      targetIndex = Math.round(swipeStartIndex) + Math.sign(rawCards) * steps;
+    } else {
+      targetIndex = Math.round(targetIndex);
+    }
+    isSwipingHoriz = false;
+    swipeDistPx = 0;
+    scheduleDeckTick();
+  };
+
+  const handleHorizontalDelta = (dx: number) => {
+    if (!isDeckOpen) return;
+    if (!isSwipingHoriz) {
+      isSwipingHoriz = true;
+      swipeStartIndex = targetIndex;
+      swipeDistPx = 0;
+    }
+
+    swipeDistPx += dx;
+    targetIndex = swipeStartIndex + swipeDistPx / getPixelsPerCard();
+    scheduleDeckTick();
+
+    window.clearTimeout(horizEndTimer);
+    horizEndTimer = window.setTimeout(finishHorizontalSwipe, 130);
+  };
+
+  window.addEventListener(
+    'wheel',
+    (e: WheelEvent) => {
+      if (!window.__loaderCompleted) return;
+      if (
+        (isControlsOpen && sandboxPanel && sandboxPanel.contains(e.target as Node)) ||
+        (weatherWidget && weatherWidget.contains(e.target as Node))
+      ) {
+        return;
+      }
+      e.preventDefault();
+      if (isDeckOpen && Math.abs(e.deltaX) > Math.abs(e.deltaY) * 0.75 && Math.abs(e.deltaX) > 0.5) {
+        handleHorizontalDelta(e.deltaX);
+      } else {
+        handleVerticalDelta(e.deltaY);
+      }
+    },
+    { passive: false }
+  );
+
+  // Touch & Pointer swipe support (vertical open/close + horizontal card switching)
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let lastTouchX = 0;
+  let lastTouchY = 0;
+  let trackingTouch = false;
+  let touchAxis: 'x' | 'y' | null = null;
+
+  window.addEventListener(
+    'touchstart',
+    (e: TouchEvent) => {
+      if (!window.__loaderCompleted) {
+        trackingTouch = false;
+        return;
+      }
+      if (
+        (isControlsOpen && sandboxPanel && sandboxPanel.contains(e.target as Node)) ||
+        (weatherWidget && weatherWidget.contains(e.target as Node)) ||
+        (deckScroller && deckScroller.contains(e.target as Node))
+      ) {
+        trackingTouch = false;
+        return;
+      }
+      trackingTouch = true;
+      touchAxis = null;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      lastTouchX = touchStartX;
+      lastTouchY = touchStartY;
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    'touchmove',
+    (e: TouchEvent) => {
+      if (!trackingTouch) return;
+      const cx = e.touches[0].clientX;
+      const cy = e.touches[0].clientY;
+
+      if (!touchAxis) {
+        const totalDx = Math.abs(cx - touchStartX);
+        const totalDy = Math.abs(cy - touchStartY);
+        if (totalDx > 6 || totalDy > 6) {
+          touchAxis = isDeckOpen && totalDx > totalDy * 1.1 ? 'x' : 'y';
+        }
+      }
+
+      const dx = lastTouchX - cx;
+      const dy = lastTouchY - cy;
+      lastTouchX = cx;
+      lastTouchY = cy;
+
+      if (touchAxis === 'x') {
+        handleHorizontalDelta(dx * 1.15);
+      } else if (touchAxis === 'y') {
+        handleVerticalDelta(dy * 1.4);
+      }
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    'touchend',
+    () => {
+      trackingTouch = false;
+      if (touchAxis === 'x') {
+        window.clearTimeout(horizEndTimer);
+        finishHorizontalSwipe();
+      }
+      touchAxis = null;
+    },
+    { passive: true }
+  );
+
+  // Mouse pointer drag on the card stage (supports horizontal card swipe & vertical swipe down to close)
+  let pointerDragging = false;
+  let pointerStartX = 0;
+  let pointerStartY = 0;
+  let lastPointerX = 0;
+  let pointerAxis: 'x' | 'y' | null = null;
+  let didPointerDrag = false;
+
+  deckOverlay?.addEventListener('pointerdown', (e: PointerEvent) => {
+    if (!isDeckOpen || e.pointerType === 'touch') return;
+    if (deckScroller && deckScroller.contains(e.target as Node)) return;
+    pointerDragging = true;
+    didPointerDrag = false;
+    pointerAxis = null;
+    pointerStartX = e.clientX;
+    pointerStartY = e.clientY;
+    lastPointerX = e.clientX;
+  });
+
+  window.addEventListener('pointermove', (e: PointerEvent) => {
+    if (!pointerDragging) return;
+    const totalDx = e.clientX - pointerStartX;
+    const totalDy = e.clientY - pointerStartY;
+
+    if (!pointerAxis && (Math.abs(totalDx) > 6 || Math.abs(totalDy) > 6)) {
+      pointerAxis = Math.abs(totalDy) > Math.abs(totalDx) * 1.2 ? 'y' : 'x';
+      didPointerDrag = true;
+    }
+
+    if (pointerAxis === 'y') {
+      if (totalDy > 36) {
+        pointerDragging = false;
+        setDeckOpen(false);
+        window.setTimeout(() => {
+          didPointerDrag = false;
+        }, 40);
+      }
+      return;
+    }
+
+    const dx = lastPointerX - e.clientX;
+    lastPointerX = e.clientX;
+    if (pointerAxis === 'x') {
+      handleHorizontalDelta(dx * 1.15);
+    }
+  });
+
+  window.addEventListener('pointerup', () => {
+    if (!pointerDragging) return;
+    pointerDragging = false;
+    if (pointerAxis === 'x') {
+      window.clearTimeout(horizEndTimer);
+      finishHorizontalSwipe();
+    }
+    if (didPointerDrag) {
+      window.setTimeout(() => {
+        didPointerDrag = false;
+      }, 40);
+    }
+    pointerAxis = null;
+  });
+
+  // Helper to wrap relative offset into [-CARD_COUNT/2, CARD_COUNT/2)
+  const wrapRel = (idx: number, centerIdx: number): number => {
+    const raw = (((idx - centerIdx) % CARD_COUNT) + CARD_COUNT) % CARD_COUNT;
+    return raw >= CARD_COUNT / 2 ? raw - CARD_COUNT : raw;
+  };
+
+  // Interactive bottom scroller
+  let scrollerDragging = false;
+  let scrollerDidDrag = false;
+  let scrollerStartX = 0;
+  let scrollerLastX = 0;
+
+  const jumpToScrollerClientX = (clientX: number) => {
+    if (!deckScrollerTrack) return;
+    const rect = deckScrollerTrack.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+    const slotIdx = Math.min(CARD_COUNT - 1, Math.floor(ratio * CARD_COUNT));
+    const base = Math.round(targetIndex);
+    targetIndex = base + wrapRel(slotIdx, base);
+    scheduleDeckTick();
+  };
+
+  deckScroller?.addEventListener('pointerdown', (e: PointerEvent) => {
+    if (!isDeckOpen) return;
+    e.stopPropagation();
+    scrollerDragging = true;
+    scrollerDidDrag = false;
+    scrollerStartX = e.clientX;
+    scrollerLastX = e.clientX;
+    deckScroller.setPointerCapture?.(e.pointerId);
+  });
+
+  window.addEventListener('pointermove', (e: PointerEvent) => {
+    if (!scrollerDragging || !deckScrollerTrack) return;
+    const rect = deckScrollerTrack.getBoundingClientRect();
+    if (Math.abs(e.clientX - scrollerStartX) > 3) {
+      scrollerDidDrag = true;
+    }
+    const dx = e.clientX - scrollerLastX;
+    scrollerLastX = e.clientX;
+    targetIndex += (dx / Math.max(1, rect.width)) * CARD_COUNT;
+    scheduleDeckTick();
+  });
+
+  window.addEventListener('pointerup', (e: PointerEvent) => {
+    if (!scrollerDragging) return;
+    scrollerDragging = false;
+    if (!scrollerDidDrag) {
+      jumpToScrollerClientX(e.clientX);
+    } else {
+      targetIndex = Math.round(targetIndex);
+      scheduleDeckTick();
+    }
+  });
+
+  deckScroller?.addEventListener('click', (e: MouseEvent) => {
+    e.stopPropagation();
+  });
+
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (!isDeckOpen) return;
+    if (e.key === 'Escape') {
+      setDeckOpen(false);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      targetIndex = Math.round(targetIndex) + (e.shiftKey ? -1 : 1);
+      scheduleDeckTick();
+    } else if (e.key === 'ArrowRight') {
+      targetIndex = Math.round(targetIndex) + 1;
+      scheduleDeckTick();
+    } else if (e.key === 'ArrowLeft') {
+      targetIndex = Math.round(targetIndex) - 1;
+      scheduleDeckTick();
+    }
+  });
+
+  // Clicking empty backdrop closes the deck; clicking a side card rotates it to center
+  deckOverlay?.addEventListener('click', (e: MouseEvent) => {
+    if (didPointerDrag) return;
+    if (deckScroller && deckScroller.contains(e.target as Node)) return;
+    const unit = (e.target as HTMLElement)?.closest<HTMLElement>('.deck-card-unit');
+    if (!unit) {
+      if (isDeckOpen) setDeckOpen(false);
+      return;
+    }
+
+    const cardIdx = Number(unit.dataset.cardIndex ?? 0);
+    const rel = wrapRel(cardIdx, Math.round(targetIndex));
+    if (Math.abs(rel) < 0.01) return;
+    targetIndex = Math.round(targetIndex) + rel;
+    scheduleDeckTick();
+  });
+
+  const lerpVal = (a: number, b: number, t: number): number => a + (b - a) * t;
+  const smoothT = (t: number): number => {
+    const c = Math.max(0, Math.min(1, t));
+    return c * c * (3 - 2 * c);
+  };
+
+  interface CardPose {
+    x: number;
+    y: number;
+    z: number;
+    rotY: number;
+    scale: number;
+    bright: number;
+    opacity: number;
+  }
+
+  const POSE_BACK: CardPose = { x: -38, y: -11.5, z: -175, rotY: 28, scale: 0.75, bright: 0.72, opacity: 1 };
+  const POSE_LEFT: CardPose = { x: -30, y: -4.5, z: -35, rotY: 28, scale: 0.86, bright: 0.88, opacity: 1 };
+  const POSE_CENTER: CardPose = { x: 0, y: -6, z: 65, rotY: 0, scale: 1.0, bright: 1.0, opacity: 1 };
+  const POSE_RIGHT: CardPose = { x: 30, y: -4.5, z: -35, rotY: -28, scale: 0.86, bright: 0.88, opacity: 1 };
+  const POSE_HIDDEN_RIGHT: CardPose = { x: 40, y: -9.5, z: -260, rotY: -34, scale: 0.68, bright: 0.6, opacity: 0 };
+  const POSE_HIDDEN_BACK: CardPose = { x: -45, y: -14, z: -260, rotY: 32, scale: 0.66, bright: 0.6, opacity: 0 };
+
+  const interpPose = (a: CardPose, b: CardPose, t: number): CardPose => {
+    const s = smoothT(t);
+    return {
+      x: lerpVal(a.x, b.x, s),
+      y: lerpVal(a.y, b.y, s),
+      z: lerpVal(a.z, b.z, s),
+      rotY: lerpVal(a.rotY, b.rotY, s),
+      scale: lerpVal(a.scale, b.scale, s),
+      bright: lerpVal(a.bright, b.bright, s),
+      opacity: lerpVal(a.opacity, b.opacity, s)
+    };
+  };
+
+  // Continuous pose over rel in [-3, 3) for 6-card mixed desktop/mobile deck
+  const computeCardPose = (rel: number): CardPose => {
+    if (rel < -2) {
+      const fade = 1 - smoothT((-2 - rel - 0.05) / 0.6);
+      const pose = interpPose(POSE_BACK, POSE_HIDDEN_BACK, -2 - rel);
+      pose.opacity = fade;
+      return pose;
+    }
+    if (rel < -1) {
+      return interpPose(POSE_BACK, POSE_LEFT, rel + 2);
+    }
+    if (rel < 0) {
+      return interpPose(POSE_LEFT, POSE_CENTER, rel + 1);
+    }
+    if (rel < 1) {
+      return interpPose(POSE_CENTER, POSE_RIGHT, rel);
+    }
+    if (rel < 2) {
+      const t = rel - 1;
+      const fade = 1 - smoothT((t - 0.1) / 0.55);
+      const pose = interpPose(POSE_RIGHT, POSE_HIDDEN_RIGHT, t);
+      pose.opacity = fade;
+      return pose;
+    }
+    return { ...POSE_HIDDEN_RIGHT };
+  };
+
+  let lastViewportW = window.innerWidth;
+
+  function tickDeckPhysics(now: number) {
+    deckRafId = 0;
+    const dt = Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000));
+    lastFrameTime = now;
+
+    // Vertical open/close spring
+    const targetProgress = isDeckOpen ? 1.0 : 0.0;
+    const force = (targetProgress - springProgress) * 210;
+    springVelocity += force * dt;
+    springVelocity *= Math.exp(-24 * dt);
+    springProgress += springVelocity * dt;
+
+    const targetOver = isDeckOpen ? Math.tanh(rawOverScroll / 220) * 0.16 : 0;
+    overScroll += (targetOver - overScroll) * Math.min(1, dt * 16);
+
+    // Slowed-down, heavily damped horizontal card-switch spring
+    const cForce = (targetIndex - currentIndex) * 38;
+    carouselVelocity += cForce * dt;
+    carouselVelocity *= Math.exp(-12.5 * dt);
+    currentIndex += carouselVelocity * dt;
+
+    const vw = window.innerWidth;
+    const isSettled =
+      Math.abs(targetProgress - springProgress) < 0.0005 &&
+      Math.abs(springVelocity) < 0.0005 &&
+      Math.abs(targetIndex - currentIndex) < 0.0005 &&
+      Math.abs(carouselVelocity) < 0.0005 &&
+      Math.abs(overScroll) < 0.0005 &&
+      Math.abs(targetOver) < 0.0005;
+
+    if (isSettled) {
+      springProgress = targetProgress;
+      springVelocity = 0;
+      carouselVelocity = 0;
+      overScroll = targetOver;
+    }
+
+    lastViewportW = vw;
+
+    const p = Math.max(0, Math.min(1.12, springProgress));
+    const clampedP = Math.max(0, Math.min(1, p));
+    const isDeckVisible = isDeckOpen || clampedP > 0.002;
+
+    if (webglStage) {
+      const hasBlur = clampedP > 0.002 || overScroll > 0.001;
+      webglStage.classList.toggle('is-blurred', hasBlur);
+      if (hasBlur) {
+        webglStage.style.setProperty('--bg-blur', `${(clampedP * 8 + overScroll * 6).toFixed(2)}px`);
+        webglStage.style.setProperty('--bg-scale', `${(1 + clampedP * 0.03 + overScroll * 0.015).toFixed(4)}`);
+      }
+    }
+
+    if (deckOverlay) {
+      deckOverlay.classList.toggle('is-active', isDeckVisible);
+      deckOverlay.style.setProperty('--deck-opacity', `${clampedP.toFixed(3)}`);
+      deckOverlay.style.setProperty(
+        '--deck-y',
+        `${((1 - p) * 64 - overScroll * 95).toFixed(2)}px`
+      );
+      deckOverlay.style.setProperty(
+        '--deck-scale',
+        `${(0.92 + clampedP * 0.08 - overScroll * 0.14).toFixed(4)}`
+      );
+    }
+
+    if (isDeckVisible) {
+      const isMobile = vw < 640;
+      const isTablet = vw >= 640 && vw <= 1024;
+      const xSpread = isMobile ? 1.32 : isTablet ? 1.16 : 1.0;
+      const zScale = isMobile ? 0.62 : isTablet ? 0.82 : 1.0;
+      const rotScale = isMobile ? 0.8 : isTablet ? 0.9 : 1.0;
+
+      for (let i = 0; i < CARD_COUNT; i++) {
+        const unit = cardUnits[i];
+        if (!unit) continue;
+        const rel = wrapRel(i, currentIndex);
+        const pose = computeCardPose(rel);
+        const cardVisible = pose.opacity > 0.005;
+        unit.style.visibility = cardVisible ? 'visible' : 'hidden';
+        if (!cardVisible) continue;
+        unit.style.transform = `translate3d(${(pose.x * xSpread).toFixed(2)}vw, ${pose.y.toFixed(2)}vh, ${(pose.z * zScale).toFixed(1)}px) rotateY(${(pose.rotY * rotScale).toFixed(2)}deg) scale(${pose.scale.toFixed(4)})`;
+        unit.style.zIndex = String(Math.round(100 + pose.z * 0.25));
+        unit.style.filter = pose.bright < 0.995 ? `brightness(${pose.bright.toFixed(3)})` : 'none';
+        unit.style.opacity = pose.opacity.toFixed(3);
+        unit.style.pointerEvents = pose.opacity > 0.15 ? 'auto' : 'none';
+        unit.style.cursor = Math.abs(rel) < 0.25 ? 'grab' : 'pointer';
+      }
+
+      if (deckScrollerThumb && deckScroller) {
+        const normIdx = (((currentIndex % CARD_COUNT) + CARD_COUNT) % CARD_COUNT);
+        deckScrollerThumb.style.transform = `translateX(${(normIdx * 100).toFixed(2)}%)`;
+        deckScroller.setAttribute('aria-valuenow', String((Math.round(normIdx) % CARD_COUNT) + 1));
+      }
+    }
+
+    if (!isSettled) {
+      deckRafId = requestAnimationFrame(tickDeckPhysics);
+    }
+  }
+
+  window.addEventListener(
+    'resize',
+    () => {
+      if (isDeckOpen && window.innerWidth !== lastViewportW) {
+        scheduleDeckTick();
+      }
+    },
+    { passive: true }
+  );
 </script>
 
 <style>
+  /* ---------------------------------------------------------
+     3D Perspective Empty Card Stack & Reflective Floor
+     --------------------------------------------------------- */
+  .deck-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    perspective: 1600px;
+    perspective-origin: 50% 42%;
+    pointer-events: none;
+    visibility: hidden;
+    opacity: var(--deck-opacity, 0);
+    user-select: none;
+  }
+
+  .deck-overlay.is-active {
+    visibility: visible;
+    will-change: opacity;
+  }
+
+  .deck-overlay.is-open {
+    pointer-events: auto;
+  }
+
+  .deck-floor {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 36vh;
+    background: linear-gradient(
+      to bottom,
+      rgba(8, 12, 22, 0) 0%,
+      rgba(6, 10, 18, 0.14) 100%
+    );
+    pointer-events: none;
+  }
+
+  .deck-stage {
+    position: relative;
+    width: 100vw;
+    height: 100svh;
+    transform-style: preserve-3d;
+    transform: translate3d(0, var(--deck-y, 64px), 0) scale(var(--deck-scale, 0.92));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .deck-overlay.is-active .deck-stage {
+    will-change: transform;
+  }
+
+  .deck-card-unit {
+    position: absolute;
+    height: clamp(175px, 42svh, 400px);
+    width: clamp(250px, 45vw, 640px);
+    transform-style: preserve-3d;
+    opacity: 1;
+  }
+
+  .deck-overlay.is-active .deck-card-unit {
+    will-change: transform, opacity;
+  }
+
+  .deck-card-unit[data-size='mobile'] {
+    width: clamp(115px, 15.5vw, 224px);
+  }
+
+  .deck-card,
+  .deck-card-reflection-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #161c28;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow:
+      0 26px 70px rgba(0, 0, 0, 0.52),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+
+  .deck-card-unit[data-size='mobile'] .deck-card,
+  .deck-card-unit[data-size='mobile'] .deck-card-reflection-inner {
+    border-radius: 22px;
+  }
+
+  .deck-card-unit[data-theme='graphite'] .deck-card,
+  .deck-card-unit[data-theme='graphite'] .deck-card-reflection-inner {
+    background: #1b2130;
+  }
+
+  .deck-card-unit[data-theme='studio'] .deck-card,
+  .deck-card-unit[data-theme='studio'] .deck-card-reflection-inner {
+    background: #131824;
+  }
+
+  .deck-card-unit[data-theme='obsidian'] .deck-card,
+  .deck-card-unit[data-theme='obsidian'] .deck-card-reflection-inner {
+    background: #0f131c;
+  }
+
+  .deck-card-unit[data-theme='midnight'] .deck-card,
+  .deck-card-unit[data-theme='midnight'] .deck-card-reflection-inner {
+    background: #181f2e;
+  }
+
+  .deck-card-unit[data-theme='carbon'] .deck-card,
+  .deck-card-unit[data-theme='carbon'] .deck-card-reflection-inner {
+    background: #121620;
+  }
+
+  /* Floor Reflection (unflipped masked container + vertically mirrored card) */
+  .deck-card-reflection {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 2px);
+    height: 100%;
+    pointer-events: none;
+    opacity: 0.46;
+    filter: blur(6px);
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.52) 0%,
+      rgba(0, 0, 0, 0.18) 38%,
+      transparent 74%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.52) 0%,
+      rgba(0, 0, 0, 0.18) 38%,
+      transparent 74%
+    );
+  }
+
+  .deck-card-reflection-inner {
+    transform: scaleY(-1);
+    box-shadow: none;
+  }
+
+  /* Bottom Scroller */
+  .deck-scroller {
+    position: absolute;
+    bottom: clamp(1rem, 3.5svh, 2.2rem);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    width: clamp(180px, 42vw, 280px);
+    padding: 0.55rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(14, 19, 30, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    cursor: pointer;
+    touch-action: none;
+  }
+
+  .deck-scroller-track {
+    position: relative;
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+  }
+
+  .deck-scroller-thumb {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: calc(100% / 6);
+    height: 100%;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
+    will-change: transform;
+  }
+
   .sandbox-panel {
     position: fixed;
     top: 1.25rem;
     right: 1.25rem;
-    z-index: 10;
+    z-index: 20;
     width: min(390px, calc(100vw - 2.5rem));
     max-height: calc(100svh - 2.5rem);
     display: flex;
     flex-direction: column;
+    contain: layout style paint;
     background: rgba(12, 22, 38, 0.56);
-    backdrop-filter: blur(24px) saturate(160%);
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    backdrop-filter: blur(16px) saturate(145%);
+    -webkit-backdrop-filter: blur(16px) saturate(145%);
     border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 22px;
     color: #fff;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.32);
     overflow: hidden;
-    transition: width 0.25s ease, background 0.25s ease;
+    opacity: 1;
+    visibility: visible;
+    translate: 0 0;
+    pointer-events: auto;
+    transition:
+      opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      translate 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s;
   }
 
-  .sandbox-panel.is-collapsed {
-    width: auto;
+  .sandbox-panel:not(.is-open) {
+    opacity: 0;
+    visibility: hidden;
+    translate: 0 12px;
+    pointer-events: none;
+    transition:
+      opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      translate 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s linear 0.28s;
   }
 
-  .sandbox-panel.is-collapsed .panel-body,
-  .sandbox-panel.is-collapsed .panel-title-wrap {
-    display: none;
+  @media (prefers-reduced-motion: reduce) {
+    .sandbox-panel:not(.is-open) {
+      translate: none;
+    }
+    .sandbox-panel {
+      transition: opacity 0.18s ease, visibility 0s;
+    }
+    .sandbox-panel:not(.is-open) {
+      transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+    }
   }
 
   .panel-header {
@@ -641,11 +1815,6 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
     gap: 0.75rem;
     padding: 0.85rem 1.1rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-  }
-
-  .sandbox-panel.is-collapsed .panel-header {
-    border-bottom: none;
-    padding: 0.5rem 0.65rem;
   }
 
   .panel-title-wrap {
@@ -663,9 +1832,11 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
   }
 
   .panel-title {
-    font-size: 0.86rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    font-family: 'Averia Serif Libre', Georgia, serif;
+    font-size-adjust: from-font;
+    font-size: 0.94rem;
+    font-weight: 400;
+    letter-spacing: 0.01em;
   }
 
   .collapse-btn {
@@ -803,5 +1974,64 @@ import ShaderCanvas from '@/components/ShaderCanvas.astro';
     accent-color: #7ad7ff;
     height: 4px;
     cursor: pointer;
+  }
+
+  @media (max-width: 1024px) {
+    .deck-card-unit {
+      width: clamp(240px, 54vw, 480px);
+      height: clamp(180px, 38svh, 330px);
+    }
+    .deck-card-unit[data-size='mobile'] {
+      width: clamp(115px, 21vw, 185px);
+    }
+  }
+
+  @media (max-width: 820px) {
+    .sandbox-panel {
+      top: auto;
+      bottom: 0.75rem;
+      right: 0.75rem;
+      width: min(390px, calc(100vw - 1.5rem));
+      max-height: 52svh;
+      border-radius: 18px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .deck-card-unit {
+      width: min(76vw, 330px);
+      height: clamp(160px, 32svh, 235px);
+    }
+    .deck-card-unit[data-size='mobile'] {
+      width: min(36vw, 150px);
+    }
+    .deck-card,
+    .deck-card-reflection-inner {
+      border-radius: 12px;
+    }
+    .deck-card-unit[data-size='mobile'] .deck-card,
+    .deck-card-unit[data-size='mobile'] .deck-card-reflection-inner {
+      border-radius: 18px;
+    }
+    .deck-scroller {
+      width: min(220px, 64vw);
+      padding: 0.45rem 0.6rem;
+    }
+    .chip-grid.cols-3 {
+      grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    }
+    .slider-row {
+      grid-template-columns: 98px 1fr 38px;
+      font-size: 0.7rem;
+    }
+  }
+
+  @media (max-height: 640px) {
+    .deck-card-unit {
+      height: min(44svh, 230px);
+    }
+    .deck-scroller {
+      bottom: 0.85rem;
+    }
   }
 </style>
